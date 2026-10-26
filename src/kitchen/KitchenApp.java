@@ -1,14 +1,34 @@
 package kitchen;
 
-import javax.swing.JFrame;
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
+import java.awt.*;
+import javax.swing.*;
 
-// Shared setup/navigation)
 public class KitchenApp {
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(
+                    UIManager.getCrossPlatformLookAndFeelClassName()
+                );
+            } catch (Exception exception) {
+                exception.printStackTrace();
+            }
+
+            Font font = new Font("Arial", Font.PLAIN, 18);
+
+            for (String key : new String[] {
+                "Button.font", "Label.font", "List.font",
+                "TextField.font", "ComboBox.font",
+                "TabbedPane.font", "OptionPane.messageFont",
+                "OptionPane.buttonFont"
+            }) {
+                UIManager.put(key, font);
+            }
+
+            // All tabs use the same data.
             AppData data = new AppData();
+
             Food food = new Food();
             Shopping shopping = new Shopping();
             Recipes recipes = new Recipes();
@@ -19,25 +39,28 @@ public class KitchenApp {
             recipes.setAppData(data);
             profiles.setAppData(data);
 
-            JTabbedPane tabs = new JTabbedPane(JTabbedPane.BOTTOM);
+            JTabbedPane tabs = new JTabbedPane();
+
             tabs.addTab("Food", food);
             tabs.addTab("Shopping", shopping);
             tabs.addTab("Recipes", recipes);
             tabs.addTab("Profiles", profiles);
+            tabs.addTab("Settings", new JPanel());
+
+            // Refresh data when switching tabs.
             tabs.addChangeListener(event -> {
-                switch (tabs.getSelectedIndex()) {
-                    case 0: food.refreshData(); break;
-                    case 1: shopping.refreshData(); break;
-                    case 2: recipes.refreshData(); break;
-                    case 3: profiles.refreshData(); break;
-                    default: break;
-                }
+                food.refreshData();
+                shopping.refreshData();
+                recipes.refreshData();
+                profiles.refreshData();
             });
 
-            JFrame frame = new JFrame("Kitchen App");
+            tabs.setPreferredSize(new Dimension(640, 800));
+
+            JFrame frame = new JFrame("Kitchen Kompanion");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setContentPane(tabs);
-            frame.setSize(640, 960);
+            frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
         });
