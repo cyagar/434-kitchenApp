@@ -17,7 +17,8 @@ public class Food extends JPanel {
 
     private final JList<String> list = new JList<>(model);
 
-    private final List<String> visibleItems = new ArrayList<>();
+    private final List<String> visibleItems =
+        new ArrayList<>();
 
     public Food() {
         setLayout(new BorderLayout(10, 10));
@@ -55,14 +56,27 @@ public class Food extends JPanel {
         refreshData();
     }
 
+    // Keep the previous data format compatible.
+    // name | unused category | status | type | quantity | unit | storage
     static String[] parts(String item) {
-        String[] p = item.split(" \\| ", -1);
+        String[] old = item.split(" \\| ", -1);
 
-        return p.length == 4
-            ? p
-            : new String[] {
-                item, "Uncategorized", "Filled", "Single use"
-            };
+        String[] p = {
+            old[0], "Uncategorized", "Filled",
+            "Single use", "", "", "Cabinet"
+        };
+
+        if (old.length >= 4) {
+            System.arraycopy(
+                old, 0, p, 0, Math.min(old.length, p.length)
+            );
+        }
+
+        return p;
+    }
+
+    static String shoppingName(String item) {
+        return item.split(" \\| ", -1)[0];
     }
 
     public void refreshData() {
@@ -79,9 +93,14 @@ public class Food extends JPanel {
             visibleItems.add(item);
 
             model.addElement(
-                p[0] + " - " + p[1] + " - "
-                + (p[2].equals("Filled") ? "Full" : "Low")
-                + (p[3].equals("Staple") ? " (Staple)" : "")
+                p[0]
+                    + " - "
+                    + (p[2].equals("Filled") ? "Full" : "Low")
+                    + (p[4].isEmpty()
+                        ? ""
+                        : " - " + p[4] + " " + p[5])
+                    + " - " + p[6]
+                    + (p[3].equals("Staple") ? " (Staple)" : "")
             );
         }
     }
@@ -90,13 +109,8 @@ public class Food extends JPanel {
         if (data == null) return;
 
         JTextField name = new JTextField();
-
-        JComboBox<String> category = new JComboBox<>(
-            new String[] {
-                "Uncategorized", "Dairy", "Meat",
-                "Fruits", "Vegetables", "Leftovers"
-            }
-        );
+        JTextField quantity = new JTextField();
+        JTextField unit = new JTextField();
 
         JComboBox<String> type = new JComboBox<>(
             new String[] {
@@ -104,19 +118,42 @@ public class Food extends JPanel {
             }
         );
 
+        JComboBox<String> storage = new JComboBox<>(
+            new String[] {"Fridge", "Freezer", "Cabinet"}
+        );
+
         Object[] form = {
             "Name:", name,
-            "Category:", category,
-            "Type:", type
+            "Type:", type,
+            "Quantity (optional):", quantity,
+            "Unit (e.g. gallons):", unit,
+            "Storage:", storage
         };
 
         while (JOptionPane.showConfirmDialog(
-                this, form, "Add food",
+                this,
+                form,
+                "Add food",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE)
                 == JOptionPane.OK_OPTION) {
 
             String entered = name.getText().trim();
+            String amount = quantity.getText().trim();
+            String units = unit.getText().trim();
+
+            boolean validAmount = amount.isEmpty();
+
+            try {
+                if (!amount.isEmpty()) {
+                    double number = Double.parseDouble(amount);
+
+                    validAmount =
+                        Double.isFinite(number) && number > 0;
+                }
+            } catch (NumberFormatException ignored) {
+                // Show the validation message below.
+            }
 
             boolean duplicate = data.foods.stream()
                 .anyMatch(
@@ -125,14 +162,18 @@ public class Food extends JPanel {
                 );
 
             if (entered.isEmpty()
-                    || entered.contains("|")
                     || duplicate
-                    || type.getSelectedIndex() == 0) {
+                    || !validAmount
+                    || type.getSelectedIndex() == 0
+                    || (entered + amount + units).contains("|")) {
 
                 JOptionPane.showMessageDialog(
                     this,
-                    "Enter a unique name without | and choose a type."
+                    "Use a unique name, choose a type, and use "
+                        + "a positive quantity or leave it blank. "
+                        + "Do not use |."
                 );
+
                 continue;
             }
 
@@ -140,9 +181,12 @@ public class Food extends JPanel {
                 String.join(
                     " | ",
                     entered,
-                    category.getSelectedItem().toString(),
+                    "Uncategorized",
                     "Filled",
-                    type.getSelectedItem().toString()
+                    type.getSelectedItem().toString(),
+                    amount,
+                    units,
+                    storage.getSelectedItem().toString()
                 )
             );
 
@@ -182,10 +226,12 @@ public class Food extends JPanel {
                 "Confirm",
                 JOptionPane.YES_NO_OPTION)
                 != JOptionPane.YES_OPTION) {
+
             return;
         }
 
         int index = data.foods.indexOf(original);
+
         if (index < 0) return;
 
         p[2] = choice.equals("Full")
@@ -194,15 +240,21 @@ public class Food extends JPanel {
 
         if (choice.equals("Empty")
                 && p[3].equals("Single use")) {
+
             data.foods.remove(index);
         } else {
             data.foods.set(index, String.join(" | ", p));
         }
 
+        boolean alreadyInShopping =
+            data.shoppingItems.stream().anyMatch(
+                item -> shoppingName(item)
+                    .equalsIgnoreCase(p[0])
+            );
+
         if (p[3].equals("Staple")
                 && !choice.equals("Full")
-                && data.shoppingItems.stream()
-                    .noneMatch(p[0]::equalsIgnoreCase)) {
+                && !alreadyInShopping) {
 
             data.shoppingItems.add(p[0]);
         }

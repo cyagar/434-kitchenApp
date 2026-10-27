@@ -26,7 +26,6 @@ public class KitchenApp {
                 UIManager.put(key, font);
             }
 
-            // All tabs use the same data.
             AppData data = new AppData();
 
             Food food = new Food();
@@ -47,7 +46,6 @@ public class KitchenApp {
             tabs.addTab("Profiles", profiles);
             tabs.addTab("Settings", new JPanel());
 
-            // Refresh data when switching tabs.
             tabs.addChangeListener(event -> {
                 food.refreshData();
                 shopping.refreshData();

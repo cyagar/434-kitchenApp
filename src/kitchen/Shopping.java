@@ -1,9 +1,11 @@
 package kitchen;
 
 import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
 import javax.swing.*;
 
-// Member: Ceyhun
+// Member: Ezra
 public class Shopping extends JPanel {
 
     private static final long serialVersionUID = 1L;
@@ -15,6 +17,8 @@ public class Shopping extends JPanel {
 
     private final JList<String> list = new JList<>(model);
 
+    private final Set<String> checked = new HashSet<>();
+
     public Shopping() {
         setLayout(new BorderLayout(10, 10));
         setBorder(
@@ -23,7 +27,7 @@ public class Shopping extends JPanel {
 
         add(
             new JLabel(
-                "Shopping list - select an item before sending or removing"
+                "Check purchased items, then choose Send to Food"
             ),
             BorderLayout.NORTH
         );
@@ -33,23 +37,77 @@ public class Shopping extends JPanel {
             ListSelectionModel.SINGLE_SELECTION
         );
 
+        list.setCellRenderer(
+            (items, value, index, selected, focus) -> {
+                JCheckBox box = new JCheckBox(
+                    Food.shoppingName(value),
+                    checked.contains(value)
+                );
+
+                box.setFont(
+                    new Font("Arial", Font.PLAIN, 18)
+                );
+                box.setOpaque(true);
+
+                box.setBackground(
+                    selected
+                        ? new Color(220, 235, 225)
+                        : Color.WHITE
+                );
+
+                return box;
+            }
+        );
+
+        list.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                int index = list.locationToIndex(
+                    event.getPoint()
+                );
+
+                if (index >= 0
+                        && list.getCellBounds(index, index)
+                            .contains(event.getPoint())) {
+
+                    toggle(model.get(index));
+                }
+            }
+        });
+
+        list.getInputMap().put(
+            KeyStroke.getKeyStroke("SPACE"), "toggle"
+        );
+
+        list.getActionMap().put(
+            "toggle",
+            new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    if (list.getSelectedValue() != null) {
+                        toggle(list.getSelectedValue());
+                    }
+                }
+            }
+        );
+
         add(new JScrollPane(list), BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(
-            new GridLayout(1, 3, 10, 0)
+            new GridLayout(1, 3, 8, 0)
         );
 
-        JButton add = new JButton("Add item");
-        JButton bought = new JButton("Send to Food");
+        JButton add = new JButton("Add");
         JButton remove = new JButton("Remove");
+        JButton send = new JButton("Send to Food");
 
         add.addActionListener(event -> addItem());
-        bought.addActionListener(event -> sendToFood());
         remove.addActionListener(event -> removeItem());
+        send.addActionListener(event -> sendToFood());
 
         buttons.add(add);
-        buttons.add(bought);
         buttons.add(remove);
+        buttons.add(send);
 
         add(buttons, BorderLayout.SOUTH);
     }
@@ -63,35 +121,57 @@ public class Shopping extends JPanel {
         model.clear();
 
         if (data != null) {
+            checked.retainAll(data.shoppingItems);
+
             for (String item : data.shoppingItems) {
                 model.addElement(item);
             }
         }
     }
 
+    private void toggle(String item) {
+        if (!checked.add(item)) {
+            checked.remove(item);
+        }
+
+        list.repaint();
+    }
+
+    private String selected() {
+        String item = list.getSelectedValue();
+
+        if (item == null) {
+            JOptionPane.showMessageDialog(
+                this, "Select a shopping item first."
+            );
+        }
+
+        return item;
+    }
+
     private void addItem() {
         if (data == null) return;
 
-        String name = JOptionPane.showInputDialog(
+        String entered = JOptionPane.showInputDialog(
             this, "Item name:"
         );
 
-        if (name == null) return;
+        if (entered == null) return;
 
-        name = name.trim();
+        String name = entered.trim();
 
-        if (name.isEmpty() || name.contains("|")) {
-            JOptionPane.showMessageDialog(
-                this, "Enter a name without |."
+        boolean duplicate = data.shoppingItems.stream()
+            .anyMatch(
+                item -> Food.shoppingName(item)
+                    .equalsIgnoreCase(name)
             );
-            return;
-        }
 
-        if (data.shoppingItems.stream()
-                .anyMatch(name::equalsIgnoreCase)) {
+        if (name.isEmpty()
+                || name.contains("|")
+                || duplicate) {
 
             JOptionPane.showMessageDialog(
-                this, "That item is already on the list."
+                this, "Enter a unique name without |."
             );
             return;
         }
@@ -100,71 +180,84 @@ public class Shopping extends JPanel {
         refreshData();
     }
 
-    private String selectedItem() {
-        String name = list.getSelectedValue();
-
-        if (name == null) {
-            JOptionPane.showMessageDialog(
-                this, "Select an item first."
-            );
-        }
-
-        return name;
-    }
-
-    private void sendToFood() {
-        String name = selectedItem();
-
-        if (data == null || name == null) return;
-
-        if (JOptionPane.showConfirmDialog(
-                this,
-                "Bought " + name + "? Send it to Food as Full?",
-                "Confirm purchase",
-                JOptionPane.YES_NO_OPTION)
-                != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        boolean found = false;
-
-        // Refill existing food while preserving its details.
-        for (int i = 0; i < data.foods.size(); i++) {
-            String[] p = Food.parts(data.foods.get(i));
-
-            if (p[0].equalsIgnoreCase(name)) {
-                p[2] = "Filled";
-                data.foods.set(i, String.join(" | ", p));
-                found = true;
-                break;
-            }
-        }
-
-        // New purchases use basic defaults.
-        if (!found) {
-            data.foods.add(
-                name + " | Uncategorized | Filled | Single use"
-            );
-        }
-
-        data.shoppingItems.remove(name);
-        refreshData();
-    }
-
     private void removeItem() {
-        String name = selectedItem();
+        if (data == null) return;
 
-        if (data == null || name == null) return;
+        String item = selected();
+
+        if (item == null) return;
 
         if (JOptionPane.showConfirmDialog(
                 this,
-                "Remove " + name + "?",
+                "Remove " + Food.shoppingName(item) + "?",
                 "Confirm removal",
                 JOptionPane.YES_NO_OPTION)
                 == JOptionPane.YES_OPTION) {
 
-            data.shoppingItems.remove(name);
+            data.shoppingItems.remove(item);
             refreshData();
         }
+    }
+
+    private void sendToFood() {
+        if (data == null) return;
+
+        if (checked.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                this, "Check purchased items first."
+            );
+            return;
+        }
+
+        if (JOptionPane.showConfirmDialog(
+                this,
+                "Send " + checked.size()
+                    + " checked item(s) to Food as Full?",
+                "Confirm purchase",
+                JOptionPane.YES_NO_OPTION)
+                != JOptionPane.YES_OPTION) {
+
+            return;
+        }
+
+        for (String item : new ArrayList<>(checked)) {
+            String name = Food.shoppingName(item);
+            boolean found = false;
+
+            for (int i = 0; i < data.foods.size(); i++) {
+                String[] p = Food.parts(data.foods.get(i));
+
+                if (p[0].equalsIgnoreCase(name)) {
+                    p[2] = "Filled";
+
+                    data.foods.set(
+                        i, String.join(" | ", p)
+                    );
+
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                data.foods.add(
+                    String.join(
+                        " | ",
+                        name,
+                        "Uncategorized",
+                        "Filled",
+                        "Single use",
+                        "",
+                        "",
+                        "Cabinet"
+                    )
+                );
+            }
+
+            data.shoppingItems.remove(item);
+        }
+
+        checked.clear();
+        refreshData();
     }
 }
