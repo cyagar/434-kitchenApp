@@ -14,7 +14,7 @@ public final class RecipeConfig {
     private RecipeConfig() { }
 
     // Developer: put your shared Spoonacular key between the quotes for a local/demo build.
-    private static final String SPOONACULAR_API_KEY = "";
+    private static final String SPOONACULAR_API_KEY = "78d5f72d560142e580794d9ab141fa91";
 
     public static String apiKey() {
         String override = System.getenv("SPOONACULAR_API_KEY");
