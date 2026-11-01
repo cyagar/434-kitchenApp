@@ -11,11 +11,14 @@ public class Shopping extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private AppData data;
+    private AppSettings settings;
 
     private final DefaultListModel<String> model =
         new DefaultListModel<>();
 
-    private final JList<String> list = new JList<>(model);
+    private final JList<String> list = new JList<String>(model) {
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+    };
 
     private final Set<String> checked = new HashSet<>();
 
@@ -25,39 +28,42 @@ public class Shopping extends JPanel {
             BorderFactory.createEmptyBorder(12, 12, 12, 12)
         );
 
-        add(
-            new JLabel(
-                "Check purchased items, then choose Send to Food"
-            ),
-            BorderLayout.NORTH
-        );
+        add(new WrapText("Check purchased items, then choose Send to Food."), BorderLayout.NORTH);
 
-        list.setFixedCellHeight(44);
+        list.setFixedCellHeight(-1);
         list.setSelectionMode(
             ListSelectionModel.SINGLE_SELECTION
         );
 
-        list.setCellRenderer(
-            (items, value, index, selected, focus) -> {
-                JCheckBox box = new JCheckBox(
-                    Food.shoppingName(value),
-                    checked.contains(value)
-                );
-
-                box.setFont(
-                    new Font("Arial", Font.PLAIN, 18)
-                );
-                box.setOpaque(true);
-
-                box.setBackground(
-                    selected
-                        ? new Color(220, 235, 225)
-                        : Color.WHITE
-                );
-
-                return box;
+        list.setCellRenderer((items, value, index, selected, focus) -> {
+            JPanel row = new JPanel(new BorderLayout(9, 0));
+            Color background = selected ? new Color(220, 235, 225) : Color.WHITE;
+            row.setBackground(background);
+            row.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+            JCheckBox box = new JCheckBox("", checked.contains(value));
+            box.setOpaque(false);
+            box.setFocusable(false);
+            row.add(box, BorderLayout.WEST);
+            JTextArea name = new JTextArea(Food.shoppingName(value));
+            name.setFont(new Font(Font.SANS_SERIF, Font.PLAIN,
+                    settings != null && settings.largerListText() ? 18 : 15));
+            name.setLineWrap(true);
+            name.setWrapStyleWord(true);
+            name.setOpaque(false);
+            name.setEditable(false);
+            int width = Math.max(100, list.getWidth() - 74);
+            name.setSize(width, 10000);
+            int height = name.getPreferredSize().height;
+            row.add(name, BorderLayout.CENTER);
+            row.setPreferredSize(new Dimension(Math.max(180, list.getWidth() - 4), Math.max(45, height + 19)));
+            return row;
+        });
+        list.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) {
+                list.setCellRenderer(list.getCellRenderer());
+                list.revalidate();
             }
-        );
+        });
 
         list.addMouseListener(new MouseAdapter() {
             @Override
@@ -110,6 +116,15 @@ public class Shopping extends JPanel {
         buttons.add(send);
 
         add(buttons, BorderLayout.SOUTH);
+    }
+
+    public void setAppSettings(AppSettings settings) {
+        this.settings = settings;
+        settings.onChange(() -> {
+            list.setCellRenderer(list.getCellRenderer());
+            list.revalidate();
+            list.repaint();
+        });
     }
 
     public void setAppData(AppData data) {

@@ -1,175 +1,284 @@
 package kitchen;
 
-import javax.swing.DefaultListModel;
-import javax.swing.JPanel;
-
-// Member: ?
-//public class Recipes extends JPanel {
-//    private static final long serialVersionUID = 1L;
-//    private AppData data;
-//    private final DefaultListModel<String> listModel = new DefaultListModel<>();
-
-//    public Recipes() {
-        // Add recipe details and send missing ingredients to Shopping.
-//    }
-
-//    public void setAppData(AppData data) {
-//        this.data = data;
-//        refreshData();
-//    }
-
-    // Refresh shared data when returning to this tab.
-//    public void refreshData() {
-//        listModel.clear();
-//        if (data != null) {
-//            for (String item : data.recipes) {
-//                listModel.addElement(item);
-//            }
-//        }
-//    }
-//}
-
-
-
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.Desktop;
 import java.net.URI;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import javax.swing.*;
+import java.util.Locale;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JComboBox;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.SwingWorker;
 
-/** Live recipe suggestions using non-empty items in the Food tab. */
+/** One-screen recipe search and instructions, using the app's own API configuration. */
 public class Recipes extends JPanel {
-    private static final long serialVersionUID=1L;
+    private static final long serialVersionUID = 1L;
+
     private AppData data;
-    private final DefaultListModel<RecipeService.Recipe> model=new DefaultListModel<>();
-    private final JList<RecipeService.Recipe> results=new JList<>(model);
-    private final JTextArea details=new JTextArea();
-    private final JLabel pantryLabel=new JLabel("Add food in the Food tab to begin.");
-    private final JTextField keyField=new JTextField(20);
-    private final JButton find=new JButton("Find Recipes");
-    private final JButton show=new JButton("View Instructions");
-    private final JButton shop=new JButton("Add Missing to Shopping");
-    private final JButton browser=new JButton("Open Recipe Website");
+    private final DefaultComboBoxModel<RecipeService.Recipe> model = new DefaultComboBoxModel<>();
+    private final JComboBox<RecipeService.Recipe> results = new JComboBox<>(model);
+    private final JTextArea details = new JTextArea();
+    private final WrapText pantryLabel = new WrapText("Add food in Food to find recipes.");
+    private final WrapText statusLabel = new WrapText("Find meals that use ingredients you already have.");
+    private final JButton find = new JButton("Find Recipes");
+    private final JButton shop = new JButton("Add Missing to Shopping");
+    private final JButton browser = new JButton("Open Recipe Website");
+    private final Map<Integer, RecipeService.RecipeDetails> detailsCache = new HashMap<>();
     private RecipeService.RecipeDetails displayedDetails;
+    private int selectionRequest = 0;
 
-    public Recipes(){
-        setLayout(new BorderLayout(10,10));
-        setBorder(BorderFactory.createEmptyBorder(12,12,12,12));
-        JPanel top=new JPanel(new BorderLayout(5,5));
-        JPanel auth=new JPanel(new BorderLayout(5,5));
-        auth.add(new JLabel("Spoonacular API key:"),BorderLayout.WEST);
-        auth.add(keyField,BorderLayout.CENTER);
-        top.add(auth,BorderLayout.NORTH);
-        top.add(pantryLabel,BorderLayout.CENTER);
-        top.add(find,BorderLayout.SOUTH);
-        add(top,BorderLayout.NORTH);
+    public Recipes() {
+        setLayout(new BorderLayout(9, 12));
+        setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
-        details.setEditable(false);details.setLineWrap(true);details.setWrapStyleWord(true);
-        details.setText("Select a recipe to see which ingredients you have and which are missing.");
-        JSplitPane split=new JSplitPane(JSplitPane.VERTICAL_SPLIT,new JScrollPane(results),new JScrollPane(details));
-        split.setResizeWeight(0.45);
-        add(split,BorderLayout.CENTER);
-        JPanel actions=new JPanel(new GridLayout(3,1,5,5));
-        actions.add(show);actions.add(shop);actions.add(browser);
-        add(actions,BorderLayout.SOUTH);
-        find.addActionListener(e->searchRecipes());
-        show.addActionListener(e->loadDetails());
-        shop.addActionListener(e->addMissing());
-        browser.addActionListener(e->openWebsite());
-        results.addListSelectionListener(e->{if(!e.getValueIsAdjusting())showSelected();});
+        JPanel top = new JPanel(new BorderLayout(5, 7));
+        JLabel heading = new JLabel("Discover recipes");
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD, 17f));
+        top.add(heading, BorderLayout.NORTH);
+        top.add(pantryLabel, BorderLayout.CENTER);
+        JPanel search = new JPanel(new BorderLayout(8, 4));
+        search.add(find, BorderLayout.WEST);
+        search.add(statusLabel, BorderLayout.CENTER);
+        top.add(search, BorderLayout.SOUTH);
+        add(top, BorderLayout.NORTH);
+
+        // One unified page: a compact recipe picker and automatically populated
+        // instructions. No second screen, split-pane or "View Instructions" step.
+        JPanel content = new JPanel(new BorderLayout(7, 9));
+        JPanel matches = new JPanel(new BorderLayout(3, 5));
+        matches.add(new JLabel("Choose a recipe"), BorderLayout.NORTH);
+        matches.add(results, BorderLayout.CENTER);
+        content.add(matches, BorderLayout.NORTH);
+
+        JPanel selectedRecipe = new JPanel(new BorderLayout(6, 7));
+        selectedRecipe.add(new JLabel("Recipe details and instructions"), BorderLayout.NORTH);
+        details.setEditable(false);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
+        details.setText("Search for recipes, then choose one above. Ingredients and "
+                + "full instructions will appear here automatically.");
+        details.setMargin(new java.awt.Insets(12, 12, 12, 12));
+        selectedRecipe.add(new JScrollPane(details), BorderLayout.CENTER);
+        JPanel actions = new JPanel(new GridLayout(1, 2, 8, 0));
+        actions.add(shop);
+        actions.add(browser);
+        selectedRecipe.add(actions, BorderLayout.SOUTH);
+        content.add(selectedRecipe, BorderLayout.CENTER);
+        add(content, BorderLayout.CENTER);
+
+        WrapText caution = new WrapText("Recipe matches are not allergy-screened; check ingredient labels.");
+        caution.setFont(caution.getFont().deriveFont(11f));
+        add(caution, BorderLayout.SOUTH);
+
+        setRecipeActionsEnabled(false);
+        results.setEnabled(false);
+        find.addActionListener(event -> searchRecipes());
+        shop.addActionListener(event -> addMissing());
+        browser.addActionListener(event -> openWebsite());
+        results.addActionListener(event -> showSelected());
     }
-    public void setAppData(AppData data){this.data=data;refreshData();}
-    public void refreshData(){
-        List<String> foods=availableIngredients();
-        pantryLabel.setText("Available ingredients ("+foods.size()+"): "+(foods.isEmpty()?"None":String.join(", ",foods)));
-        pantryLabel.setToolTipText(String.join(", ",foods));
+
+    public void setAppData(AppData data) {
+        this.data = data;
+        refreshData();
     }
-    private List<String> availableIngredients(){
-        List<String> names=new ArrayList<>();
-        if(data!=null)for(String item:data.foods){
-            String[] p=Food.parts(item);
-            if(!p[2].equalsIgnoreCase("Empty") && !p[0].trim().isEmpty() &&
-                    names.stream().noneMatch(n->n.equalsIgnoreCase(p[0].trim())))names.add(p[0].trim());
+
+    public void refreshData() {
+        List<String> ingredients = availableIngredients();
+        String names = ingredients.isEmpty() ? "None yet" : String.join(", ", ingredients);
+        pantryLabel.setText("Your ingredients (" + ingredients.size() + "): " + names);
+        pantryLabel.setToolTipText(names);
+    }
+
+    private List<String> availableIngredients() {
+        List<String> names = new ArrayList<>();
+        if (data != null) {
+            for (String item : data.foods) {
+                String[] fields = Food.parts(item);
+                String name = fields[0].trim();
+                if (!fields[2].equalsIgnoreCase("Empty") && !name.isEmpty()
+                        && names.stream().noneMatch(existing -> existing.equalsIgnoreCase(name))) {
+                    names.add(name);
+                }
+            }
         }
         return names;
     }
-    private void searchRecipes(){
-        List<String> ingredients=availableIngredients();
-        if(ingredients.isEmpty()){JOptionPane.showMessageDialog(this,"Add available food in the Food tab first.");return;}
-        if(keyField.getText().trim().isEmpty()){JOptionPane.showMessageDialog(this,"Enter your Spoonacular API key.");return;}
-        find.setEnabled(false);find.setText("Searching...");model.clear();details.setText("Searching recipes...");displayedDetails=null;
-        RecipeService service=new RecipeService(keyField.getText());
-        new SwingWorker<List<RecipeService.Recipe>,Void>(){
-            @Override protected List<RecipeService.Recipe> doInBackground() throws Exception{return service.findByIngredients(ingredients);}
-            @Override protected void done(){
-                find.setEnabled(true);find.setText("Find Recipes");
-                try{
-                    List<RecipeService.Recipe> found=get();
-                    for(RecipeService.Recipe recipe:found)model.addElement(recipe);
-                    details.setText(found.isEmpty()?"No recipes found. Try adding different ingredients.":
-                        "Found "+found.size()+" recipes. Select one to see ingredient matches.");
-                }catch(Exception ex){details.setText("Recipe search failed: "+errorMessage(ex));}
+
+    private void searchRecipes() {
+        List<String> ingredients = availableIngredients();
+        if (ingredients.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Add available foods in the Food tab first.");
+            return;
+        }
+        // No user-facing API key field. The developer configures the shared key once.
+        if (!RecipeConfig.isConfigured()) {
+            statusLabel.setText("Recipe search unavailable: service not configured in this build.");
+            details.setText("Recipe search has not been configured by the app developer. "
+                    + "The household user does not need an API key.\n\n"
+                    + "Developer: set SPOONACULAR_API_KEY in RecipeConfig.java "
+                    + "or in the build environment, then restart the app.");
+            return;
+        }
+
+        ++selectionRequest;
+        model.removeAllElements();
+        results.setEnabled(false);
+        detailsCache.clear();
+        displayedDetails = null;
+        setRecipeActionsEnabled(false);
+        find.setEnabled(false);
+        find.setText("Searching...");
+        statusLabel.setText("Searching available recipes...");
+        details.setText("Searching for recipes using your ingredients...");
+
+        RecipeService service = new RecipeService(RecipeConfig.apiKey());
+        new SwingWorker<List<RecipeService.Recipe>, Void>() {
+            @Override protected List<RecipeService.Recipe> doInBackground() throws Exception {
+                return service.findByIngredients(ingredients);
+            }
+
+            @Override protected void done() {
+                find.setEnabled(true);
+                find.setText("Find Recipes");
+                try {
+                    List<RecipeService.Recipe> recipes = get();
+                    for (RecipeService.Recipe recipe : recipes) model.addElement(recipe);
+                    statusLabel.setText(recipes.size() + " recipe(s) found");
+                    results.setEnabled(!recipes.isEmpty());
+                    if (recipes.isEmpty()) {
+                        details.setText("No recipes found. Try adding other foods to your kitchen.");
+                    } else {
+                        results.setSelectedIndex(0); // Loads first recipe automatically.
+                    }
+                } catch (Exception ex) {
+                    statusLabel.setText("Recipe search failed");
+                    details.setText("Could not load recipes: " + errorMessage(ex));
+                }
             }
         }.execute();
     }
-    private static String errorMessage(Exception ex){
-        Throwable t=ex;
-        while(t.getCause()!=null)t=t.getCause();
-        return t.getMessage()==null?t.toString():t.getMessage();
+
+    private void showSelected() {
+        int request = ++selectionRequest;
+        RecipeService.Recipe recipe = (RecipeService.Recipe) results.getSelectedItem();
+        displayedDetails = null;
+        setRecipeActionsEnabled(recipe != null);
+        if (recipe == null) return;
+
+        String overview = recipe.title + "\n\nIngredients you have:\n  "
+                + (recipe.used.isEmpty() ? "None reported" : String.join(", ", recipe.used))
+                + "\n\nIngredients missing:\n  "
+                + (recipe.missing.isEmpty() ? "None reported" : String.join(", ", recipe.missing));
+        details.setText(overview + "\n\nLoading full instructions...");
+        details.setCaretPosition(0);
+
+        RecipeService.RecipeDetails cached = detailsCache.get(recipe.id);
+        if (cached != null) {
+            displayDetails(recipe, cached, overview);
+            return;
+        }
+        RecipeService service = new RecipeService(RecipeConfig.apiKey());
+        new SwingWorker<RecipeService.RecipeDetails, Void>() {
+            @Override protected RecipeService.RecipeDetails doInBackground() throws Exception {
+                return service.getDetails(recipe.id);
+            }
+
+            @Override protected void done() {
+                try {
+                    RecipeService.RecipeDetails full = get();
+                    detailsCache.put(recipe.id, full);
+                    if (request == selectionRequest && results.getSelectedItem() == recipe)
+                        displayDetails(recipe, full, overview);
+                } catch (Exception ex) {
+                    if (request == selectionRequest && results.getSelectedItem() == recipe) {
+                        details.setText(overview + "\n\nCould not load instructions: " + errorMessage(ex)
+                                + "\nYou can still open the recipe website.");
+                    }
+                }
+            }
+        }.execute();
     }
-    private void showSelected(){
-        displayedDetails=null;
-        RecipeService.Recipe r=results.getSelectedValue();if(r==null)return;
-        details.setText(r.title+"\n\nAvailable:\n  "+String.join(", ",r.used)+
-            "\n\nMissing:\n  "+(r.missing.isEmpty()?"Nothing reported":String.join(", ",r.missing))+
-            "\n\nClick View Instructions for full details.");
+
+    private void displayDetails(RecipeService.Recipe recipe,
+                                RecipeService.RecipeDetails full, String overview) {
+        displayedDetails = full;
+        String instructions = full.instructions == null ? "" : full.instructions
+                .replaceAll("<[^>]*>", " ").replace("&nbsp;", " ")
+                .replace("&amp;", "&").replace("&quot;", "\"").trim();
+        details.setText(overview + "\n\nReady in: " + full.minutes + " minutes"
+                + "    Servings: " + full.servings
+                + "\n\nAll ingredients:\n - " + String.join("\n - ", full.ingredients)
+                + "\n\nInstructions:\n" + (instructions.isEmpty()
+                ? "See the recipe website for instructions." : instructions)
+                + "\n\nSource: " + (full.sourceUrl == null ? "" : full.sourceUrl));
         details.setCaretPosition(0);
     }
-    private void loadDetails(){
-        RecipeService.Recipe r=results.getSelectedValue();
-        if(r==null){JOptionPane.showMessageDialog(this,"Select a recipe first.");return;}
-        show.setEnabled(false);details.setText("Loading recipe details...");
-        new SwingWorker<RecipeService.RecipeDetails,Void>(){
-            @Override protected RecipeService.RecipeDetails doInBackground()throws Exception{
-                return new RecipeService(keyField.getText()).getDetails(r.id);
-            }
-            @Override protected void done(){
-                show.setEnabled(true);
-                try{
-                    RecipeService.RecipeDetails d=get();displayedDetails=d;
-                    details.setText(d.title+"\nReady in: "+d.minutes+" min | Servings: "+d.servings+
-                        "\n\nIngredients:\n"+String.join("\n",d.ingredients)+
-                        "\n\nInstructions:\n"+(d.instructions.isEmpty()?"See recipe website for instructions.":
-                            d.instructions.replaceAll("<[^>]*>"," ").replace("&nbsp;"," ").replace("&amp;","&"))+
-                        "\n\nSource: "+d.sourceUrl);
-                    details.setCaretPosition(0);
-                }catch(Exception ex){details.setText("Could not load recipe: "+errorMessage(ex));}
-            }
-        }.execute();
+
+    private static String errorMessage(Exception error) {
+        Throwable cause = error;
+        while (cause.getCause() != null) cause = cause.getCause();
+        return cause.getMessage() == null ? cause.toString() : cause.getMessage();
     }
-    private void addMissing(){
-        RecipeService.Recipe r=results.getSelectedValue();
-        if(r==null || data==null){JOptionPane.showMessageDialog(this,"Select a recipe first.");return;}
-        int added=0;
-        for(String raw:r.missing){
-            String name=raw.trim();
-            if(name.isEmpty() || name.contains("|"))continue;
-            boolean exists=data.shoppingItems.stream().anyMatch(s->Food.shoppingName(s).equalsIgnoreCase(name));
-            if(!exists){data.shoppingItems.add(name);added++;}
+
+    private void setRecipeActionsEnabled(boolean enabled) {
+        shop.setEnabled(enabled);
+        browser.setEnabled(enabled);
+    }
+
+    private void addMissing() {
+        RecipeService.Recipe recipe = (RecipeService.Recipe) results.getSelectedItem();
+        if (recipe == null || data == null) {
+            JOptionPane.showMessageDialog(this, "Choose a recipe first.");
+            return;
         }
-        JOptionPane.showMessageDialog(this,added+" missing ingredient(s) added to Shopping.");
+        int added = 0;
+        for (String raw : recipe.missing) {
+            String name = raw.trim();
+            if (name.isEmpty() || name.contains("|")) continue;
+            boolean exists = data.shoppingItems.stream()
+                    .anyMatch(item -> Food.shoppingName(item).equalsIgnoreCase(name));
+            if (!exists) {
+                data.shoppingItems.add(name);
+                added++;
+            }
+        }
+        JOptionPane.showMessageDialog(this, added + " missing ingredient(s) added to Shopping.");
     }
-    private void openWebsite(){
-        RecipeService.Recipe r=results.getSelectedValue();
-        if(r==null){JOptionPane.showMessageDialog(this,"Select a recipe first.");return;}
-        String url=displayedDetails!=null?displayedDetails.sourceUrl:"";
-        if(url.isEmpty())url="https://spoonacular.com/recipes/"+r.title.toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+","-").replaceAll("(^-|-$)","")+"-"+r.id;
-        try{
-            URI uri=URI.create(url);
-            if(!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme()))
+
+    private void openWebsite() {
+        RecipeService.Recipe recipe = (RecipeService.Recipe) results.getSelectedItem();
+        if (recipe == null) {
+            JOptionPane.showMessageDialog(this, "Choose a recipe first.");
+            return;
+        }
+        String url = displayedDetails != null ? displayedDetails.sourceUrl : null;
+        if (url == null || url.isEmpty()) {
+            url = "https://spoonacular.com/recipes/"
+                    + recipe.title.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("(^-|-$)", "") + "-" + recipe.id;
+        }
+        try {
+            URI uri = URI.create(url);
+            if (!"http".equalsIgnoreCase(uri.getScheme())
+                    && !"https".equalsIgnoreCase(uri.getScheme()))
                 throw new IllegalArgumentException("Unsupported URL");
             Desktop.getDesktop().browse(uri);
-        }catch(Exception ex){JOptionPane.showMessageDialog(this,"Cannot open recipe URL: "+ex.getMessage());}
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Cannot open recipe website: " + ex.getMessage());
+        }
     }
 }

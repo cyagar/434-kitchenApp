@@ -19,7 +19,7 @@ public class RecipeService {
     private static String enc(String s) {return URLEncoder.encode(s, StandardCharsets.UTF_8);}
 
     private Object get(String path) throws IOException, InterruptedException {
-        if (apiKey.isEmpty()) throw new IOException("Add your Spoonacular API key first.");
+        if (apiKey.isEmpty()) throw new IOException("Recipe service is not configured in this build.");
         String separator = path.contains("?") ? "&" : "?";
         HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + path + separator + "apiKey=" + enc(apiKey)))
             .timeout(Duration.ofSeconds(20)).GET().build();
