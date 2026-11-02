@@ -21,6 +21,7 @@ public class Shopping extends JPanel {
     };
 
     private final Set<String> checked = new HashSet<>();
+    private final JCheckBox selectAll = new JCheckBox("Select all");
 
     public Shopping() {
         setLayout(new BorderLayout(10, 10));
@@ -28,7 +29,15 @@ public class Shopping extends JPanel {
             BorderFactory.createEmptyBorder(12, 12, 12, 12)
         );
 
-        add(new WrapText("Check purchased items, then choose Send to Food."), BorderLayout.NORTH);
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        selectAll.setOpaque(false);
+        selectAll.addActionListener(e -> {
+            checked.clear();
+            if (selectAll.isSelected()) for (int i = 0; i < model.size(); i++) checked.add(model.get(i));
+            list.repaint();
+        });
+        top.add(selectAll);
+        add(top, BorderLayout.NORTH);
 
         list.setFixedCellHeight(-1);
         list.setSelectionMode(
@@ -103,17 +112,21 @@ public class Shopping extends JPanel {
             new GridLayout(1, 3, 8, 0)
         );
 
-        JButton add = new JButton("Add");
-        JButton remove = new JButton("Remove");
-        JButton send = new JButton("Send to Food");
+        JButton add = new RoundedButton("+");
+        add.setToolTipText("Add shopping item");
+        add.getAccessibleContext().setAccessibleName("Add shopping item");
+        JButton remove = new RoundedButton("-");
+        remove.setToolTipText("Remove selected or checked items");
+        remove.getAccessibleContext().setAccessibleName("Remove shopping items");
+        JButton send = new RoundedButton("← Send to Food");
 
         add.addActionListener(event -> addItem());
         remove.addActionListener(event -> removeItem());
         send.addActionListener(event -> sendToFood());
 
+        buttons.add(send);
         buttons.add(add);
         buttons.add(remove);
-        buttons.add(send);
 
         add(buttons, BorderLayout.SOUTH);
     }
@@ -142,6 +155,11 @@ public class Shopping extends JPanel {
                 model.addElement(item);
             }
         }
+        updateSelectAll();
+    }
+
+    private void updateSelectAll() {
+        selectAll.setSelected(model.size() > 0 && checked.size() == model.size());
     }
 
     private void toggle(String item) {
@@ -150,6 +168,7 @@ public class Shopping extends JPanel {
         }
 
         list.repaint();
+        updateSelectAll();
     }
 
     private String selected() {
@@ -197,21 +216,18 @@ public class Shopping extends JPanel {
 
     private void removeItem() {
         if (data == null) return;
-
-        String item = selected();
-
-        if (item == null) return;
-
-        if (JOptionPane.showConfirmDialog(
-                this,
-                "Remove " + Food.shoppingName(item) + "?",
-                "Confirm removal",
-                JOptionPane.YES_NO_OPTION)
-                == JOptionPane.YES_OPTION) {
-
-            data.shoppingItems.remove(item);
-            refreshData();
+        java.util.List<String> toRemove = new ArrayList<>(checked);
+        if (toRemove.isEmpty()) {
+            String item = selected();
+            if (item == null) return;
+            toRemove.add(item);
         }
+        if (JOptionPane.showConfirmDialog(this,
+                "Remove " + toRemove.size() + " shopping item(s)?", "Confirm removal",
+                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        data.shoppingItems.removeAll(toRemove);
+        checked.removeAll(toRemove);
+        refreshData();
     }
 
     private void sendToFood() {
@@ -243,7 +259,14 @@ public class Shopping extends JPanel {
                 String[] p = Food.parts(data.foods.get(i));
 
                 if (p[0].equalsIgnoreCase(name)) {
-                    p[2] = "Filled";
+                    Double full = Stock.parse(p[7]);
+                    if (full != null && full > 0) {
+                        p[4] = Stock.format(full);
+                        p[2] = Stock.status(full, full);
+                    } else {
+                        if (Stock.parse(p[4]) != null && Stock.parse(p[4]) == 0) p[4] = "";
+                        p[2] = "Filled";
+                    }
 
                     data.foods.set(
                         i, String.join(" | ", p)
@@ -264,7 +287,8 @@ public class Shopping extends JPanel {
                         "Single use",
                         "",
                         "",
-                        "Cabinet"
+                        "Cabinet",
+                        ""
                     )
                 );
             }

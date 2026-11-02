@@ -34,14 +34,6 @@ public class KitchenApp {
             JPanel[] pages = {food, shopping, recipes, profiles, settings};
             String[] names = {"Food", "Shopping", "Recipes", "Profiles", "Settings"};
             String[] symbols = {"\u2302", "\u2611", "\u2630", "\u263a", "\u2699"};
-            String[] subtitles = {
-                "Keep track of what is in your kitchen",
-                "Everything you need on your next trip",
-                "Discover meals from your ingredients",
-                "Manage your household preferences",
-                "Make Kitchen Kompanion your own"
-            };
-
             JPanel cards = new JPanel(new CardLayout());
             cards.setBackground(BG);
             for (int i = 0; i < pages.length; i++) {
@@ -59,30 +51,13 @@ public class KitchenApp {
 
             JPanel root = new JPanel(new BorderLayout());
             root.setBackground(BG);
-            JLabel heading = new JLabel("My Kitchen");
-            heading.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 27));
+            JLabel heading = new JLabel("Food");
+            heading.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 25));
             heading.setForeground(INK);
-            WrapText subtitle = new WrapText(subtitles[0]);
-            subtitle.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-            subtitle.setForeground(MUTED);
-            JPanel header = new JPanel(new BorderLayout(0, 6));
+            JPanel header = new JPanel(new BorderLayout());
             header.setBackground(BG);
-            header.setBorder(new EmptyBorder(24, 24, 9, 24));
-            JLabel brand = new JLabel("KITCHEN KOMPANION");
-            brand.setForeground(GREEN);
-            brand.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
-            JPanel headerText = new JPanel();
-            headerText.setLayout(new BoxLayout(headerText, BoxLayout.Y_AXIS));
-            headerText.setOpaque(false);
-            brand.setAlignmentX(Component.LEFT_ALIGNMENT);
-            heading.setAlignmentX(Component.LEFT_ALIGNMENT);
-            subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-            headerText.add(brand);
-            headerText.add(Box.createVerticalStrut(5));
-            headerText.add(heading);
-            headerText.add(Box.createVerticalStrut(4));
-            headerText.add(subtitle);
-            header.add(headerText, BorderLayout.CENTER);
+            header.setBorder(new EmptyBorder(18, 24, 10, 24));
+            header.add(heading, BorderLayout.WEST);
             root.add(header, BorderLayout.NORTH);
             root.add(cards, BorderLayout.CENTER);
 
@@ -92,19 +67,18 @@ public class KitchenApp {
             JButton[] navButtons = new JButton[names.length];
             for (int i = 0; i < names.length; i++) {
                 final int index = i;
-                JButton button = new JButton("<html><center><span style='font-size:20px'>" + symbols[i] + "</span><br>" + names[i] + "</center></html>");
+                JButton button = new RoundedButton("<html><center><span style='font-size:20px'>" + symbols[i] + "</span><br>" + names[i] + "</center></html>");
                 button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
                 button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 button.setFocusPainted(false);
                 button.setBorder(new EmptyBorder(7, 1, 7, 1));
-                button.setOpaque(true);
-                button.setContentAreaFilled(true);
+                button.setOpaque(false);
+                button.setContentAreaFilled(false);
                 navButtons[i] = button;
                 nav.add(button);
                 button.addActionListener(e -> {
                     ((CardLayout) cards.getLayout()).show(cards, names[index]);
-                    heading.setText(index == 0 ? "My Kitchen" : names[index]);
-                    subtitle.setText(subtitles[index]);
+                    heading.setText(names[index]);
                     for (int j = 0; j < navButtons.length; j++) {
                         navButtons[j].setBackground(j == index ? new Color(228, 243, 233) : Color.WHITE);
                         navButtons[j].setForeground(j == index ? GREEN : MUTED);
@@ -126,8 +100,8 @@ public class KitchenApp {
             JFrame frame = new JFrame("Kitchen Kompanion");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setContentPane(root);
-            frame.setMinimumSize(new Dimension(405, 600));
-            frame.setSize(550, 830);
+            frame.setMinimumSize(new Dimension(370, 560));
+            frame.setSize(520, 780);
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
         });
@@ -160,7 +134,8 @@ public class KitchenApp {
             b.setForeground(GREEN);
             b.setFocusPainted(false);
             b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            b.setBorder(new CompoundBorder(new LineBorder(new Color(208, 229, 215), 1, true), new EmptyBorder(9, 8, 9, 8)));
+            if (!(b instanceof RoundedButton))
+                b.setBorder(new CompoundBorder(new LineBorder(new Color(208, 229, 215), 1, true), new EmptyBorder(9, 8, 9, 8)));
         }
         if (component instanceof JTextField || component instanceof JTextArea) {
             component.setBackground(new Color(250, 252, 250));
@@ -185,7 +160,7 @@ public class KitchenApp {
         preferences.setLayout(new BoxLayout(preferences, BoxLayout.Y_AXIS));
         preferences.setBorder(new EmptyBorder(6, 6, 12, 12));
 
-        JLabel heading = new JLabel("Preferences");
+        JLabel heading = new JLabel("Display & behavior");
         heading.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
         heading.setAlignmentX(Component.LEFT_ALIGNMENT);
         preferences.add(heading);
@@ -221,7 +196,7 @@ public class KitchenApp {
         addText(preferences, "Allergy and dietary warning hints always remain visible in Food. They are not a substitute for checking ingredient labels.");
         preferences.add(Box.createVerticalStrut(14));
 
-        JButton restore = new JButton("Restore default preferences");
+        JButton restore = new RoundedButton("Restore default preferences");
         restore.setAlignmentX(Component.LEFT_ALIGNMENT);
         restore.addActionListener(e -> {
             settings.reset();
@@ -233,7 +208,7 @@ public class KitchenApp {
         });
         preferences.add(restore);
         preferences.add(Box.createVerticalStrut(14));
-        addText(preferences, "Version 1.2 • Java Swing. Food, shopping items and profiles are held in memory and are cleared when you exit the app; display settings are saved locally.");
+        addText(preferences, "Version 1.3 • Food, shopping items and profiles reset when the app closes. Display settings are saved locally.");
 
         JScrollPane scroll = new JScrollPane(preferences);
         scroll.setBorder(BorderFactory.createEmptyBorder());

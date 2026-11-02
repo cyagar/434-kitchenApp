@@ -40,13 +40,13 @@ public class Profiles extends JPanel {
         memberScroll.getVerticalScrollBar().setUnitIncrement(16);
         landing.add(memberScroll, BorderLayout.CENTER);
 
-        JButton addPerson = new JButton("+ Add a person");
+        JButton addPerson = new RoundedButton("+ Add a person");
         addPerson.addActionListener(e -> addPerson());
         landing.add(addPerson, BorderLayout.SOUTH);
 
         JPanel editor = new JPanel(new BorderLayout(0, 12));
         JPanel header = new JPanel(new BorderLayout(10, 4));
-        JButton back = new JButton("\u2190 Back");
+        JButton back = new RoundedButton("\u2190 Back");
         back.addActionListener(e -> goBack());
         header.add(back, BorderLayout.WEST);
         editingTitle.setFont(editingTitle.getFont().deriveFont(Font.BOLD, 17f));
@@ -80,8 +80,8 @@ public class Profiles extends JPanel {
         editor.add(editScroll, BorderLayout.CENTER);
 
         JPanel actions = new JPanel(new GridLayout(1, 2, 9, 0));
-        JButton save = new JButton("Save changes");
-        JButton remove = new JButton("Remove person");
+        JButton save = new RoundedButton("Save changes");
+        JButton remove = new RoundedButton("Remove person");
         save.addActionListener(e -> savePerson());
         remove.addActionListener(e -> removePerson());
         actions.add(save);
@@ -127,7 +127,7 @@ public class Profiles extends JPanel {
             for (int i = 0; i < data.profiles.size(); i++) {
                 final int index = i;
                 String[] values = unpack(data.profiles.get(i));
-                JButton button = new JButton(values[0] + "   \u203a");
+                JButton button = new RoundedButton(values[0] + "   \u203a");
                 button.setHorizontalAlignment(SwingConstants.LEFT);
                 button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
                 button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
