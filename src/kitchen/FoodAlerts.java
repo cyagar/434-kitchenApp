@@ -9,11 +9,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * Name-based warning hints for the household's declared allergies and diets.
- * Food names are NOT complete ingredient lists; this is intentionally a
- * potential-conflict indicator, never a declaration that a food is safe.
- */
+// Name based warning hints for the household's declared allergies and diets.
 public final class FoodAlerts {
     private FoodAlerts() { }
 
@@ -54,14 +50,14 @@ public final class FoodAlerts {
         return Collections.unmodifiableList(Arrays.asList(words));
     }
 
-    /** Returned strings identify the member and the possible reason for a warning. */
+    // Returned strings identify the member and the possible reason for a warning.
     public static List<String> warningsFor(String foodName, List<String> rawProfiles) {
         if (foodName == null || rawProfiles == null) return Collections.emptyList();
         String food = normalize(foodName);
         if (food.isEmpty()) return Collections.emptyList();
         Set<String> warnings = new LinkedHashSet<>();
         for (String raw : rawProfiles) {
-            String[] profile = raw.split(" \\| ", -1);
+            String[] profile = AppData.fields(raw);
             String member = profile.length > 0 ? profile[0].trim() : "Member";
             if (member.isEmpty()) member = "Member";
             if (profile.length > 1) {

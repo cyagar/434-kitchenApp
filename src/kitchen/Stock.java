@@ -1,16 +1,8 @@
 package kitchen;
 
-/** Keeps stock thresholds consistent across Food and Shopping. */
+// Quantity helpers only; Pantry availability is selected by the user.
 public final class Stock {
     private Stock() { }
-
-    public static String status(double remaining, double fullAmount) {
-        if (!Double.isFinite(remaining) || remaining < 0) throw new IllegalArgumentException("Invalid remaining quantity");
-        if (!Double.isFinite(fullAmount) || fullAmount <= 0) throw new IllegalArgumentException("Invalid full quantity");
-        if (remaining == 0) return "Empty";
-        if (remaining <= 1 || remaining <= fullAmount / 2.0) return "Running low";
-        return "Filled";
-    }
 
     public static Double parse(String text) {
         try {
@@ -20,8 +12,14 @@ public final class Stock {
         } catch (NumberFormatException e) { return null; }
     }
 
+    public static String[] units() {
+        return new String[]{"pieces", "g", "kg", "oz", "lb", "mL", "L", "cups", "tbsp", "tsp", "packs", "bottles", "cans", "gallons", "other / none"};
+    }
+    public static String unitLabel(String choice) {
+        return choice == null || choice.equals("other / none") ? "" : choice;
+    }
+
     public static String format(double value) {
-        if (value == Math.rint(value) && value <= Long.MAX_VALUE) return Long.toString((long) value);
         return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
     }
 }

@@ -4,11 +4,13 @@ import java.awt.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-/** Antialiased rounded filled button; uses only built-in Java Swing. */
+// Antialiased rounded filled button; uses only built-in Java Swing.
 public class RoundedButton extends JButton {
     private static final long serialVersionUID = 1L;
     public RoundedButton(String text) {
-        super(text);
+        super();
+        putClientProperty("html.disable", Boolean.TRUE);
+        setText(text);
         setOpaque(false);
         setContentAreaFilled(false);
         setBackground(new Color(231, 244, 236));
@@ -16,6 +18,10 @@ public class RoundedButton extends JButton {
         setFocusPainted(false);
         setBorder(new EmptyBorder(10, 14, 10, 14));
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    }
+    @Override public Dimension getPreferredSize() {
+        Dimension size = super.getPreferredSize();
+        return new Dimension(Math.max(44, size.width), Math.max(44, size.height));
     }
     @Override protected void paintComponent(Graphics g) {
         Graphics2D graphics = (Graphics2D) g.create();

@@ -8,12 +8,10 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.LinkedHashSet;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-/** Food inventory, name-based allergy notices and a three-color availability dot. */
+// Food inventory, name-based allergy notices and a three-color availability dot.
 public class Food extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Color FULL = new Color(34, 153, 91);
@@ -31,12 +29,15 @@ public class Food extends JPanel {
     private final JPanel content = new JPanel(screens);
     private final JPanel details = new JPanel(new BorderLayout(9, 12));
     private String editingItem;
+    private final JLabel inventoryHint = new JLabel("Add your first item with Add item below.");
 
 
     public Food() {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(12, 12, 12, 12));
         JPanel overview = new JPanel(new BorderLayout(9, 12));
+        inventoryHint.setForeground(new Color(88, 111, 99));
+        overview.add(inventoryHint, BorderLayout.NORTH);
         list.setFixedCellHeight(-1);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer((items, value, index, selected, focus) -> createRow(value, index, selected));
@@ -64,12 +65,13 @@ public class Food extends JPanel {
         overview.add(scroll, BorderLayout.CENTER);
 
         JPanel bottom = new JPanel(new BorderLayout(6, 7));
-        JPanel plusRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        JButton plus = new RoundedButton("+");
-        plus.setToolTipText("Add food");
-        plus.getAccessibleContext().setAccessibleName("Add food");
-        plus.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 25));
-        plus.setPreferredSize(new Dimension(58, 47));
+        JPanel plusRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        JButton plus = new RoundedButton("Add item");
+        plus.setToolTipText("Add pantry item");
+        plus.getAccessibleContext().setAccessibleName("Add pantry item");
+        plus.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+        plus.setIcon(AppScreens.icon(5, true));
+        plus.setPreferredSize(new Dimension(160, 46));
         plus.addActionListener(e -> addFood());
         plusRow.add(plus);
         bottom.add(plusRow, BorderLayout.NORTH);
@@ -101,38 +103,29 @@ public class Food extends JPanel {
         JButton back = new RoundedButton("← Back");
         back.addActionListener(e -> screens.show(content, "overview"));
         top.add(back, BorderLayout.WEST);
-        JLabel title = new JLabel("<html><body style='width:190px'>" + escapeHtml(p[0]) + "</body></html>");
+        JTextArea title = AppScreens.copy(p[0]);
         title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 19));
         top.add(title, BorderLayout.CENTER);
         details.add(top, BorderLayout.NORTH);
 
-        JPanel fields = new JPanel();
-        fields.setLayout(new BoxLayout(fields, BoxLayout.Y_AXIS));
+        JPanel fields = AppScreens.form();
         fields.setBorder(new EmptyBorder(12, 5, 14, 8));
         addSection(fields, "Availability: " + displayStatus(p[2]));
         addInfo(fields, "Type: " + p[3] + "      Storage: " + p[6]);
         JTextField remaining = new JTextField(p[4]);
         remaining.setMaximumSize(new Dimension(Integer.MAX_VALUE, 43));
-        addSection(fields, "Quantity remaining");
-        addInfo(fields, p[5].isEmpty() ? "Enter a number; zero means empty." : "Unit: " + p[5]);
+        addSection(fields, "Quantity remaining (optional)");
+        addInfo(fields, p[5].isEmpty() ? "Quantity is separate from stock status." : "Unit: " + p[5]);
         fields.add(remaining);
         fields.add(Box.createVerticalStrut(11));
-        Double baseline = Stock.parse(p[7]);
-        if (baseline != null && baseline > 0) addInfo(fields, "Full amount: " + Stock.format(baseline) + " " + p[5]);
-        JCheckBox resetBaseline = new JCheckBox("Set this quantity as the new full amount");
-        resetBaseline.setAlignmentX(Component.LEFT_ALIGNMENT);
-        resetBaseline.setOpaque(false);
-        fields.add(resetBaseline);
-        addInfo(fields, "1 = Low  •  0 = Empty  •  Half or less of full = Low");
-
-        JComboBox<String> manual = new JComboBox<>(new String[]{"Full", "Low", "Empty"});
-        manual.setSelectedItem(displayStatus(p[2]));
-        addSection(fields, "Status (used if quantity is blank)");
-        manual.setMaximumSize(new Dimension(Integer.MAX_VALUE, 43));
+        addSection(fields, "Stock status");
+        JPanel manual = statusButtons(displayStatus(p[2]));
         fields.add(manual);
+        fields.add(Box.createVerticalStrut(8));
+        addInfo(fields, "Choose a status; quantity does not change it automatically.");
         fields.add(Box.createVerticalStrut(15));
         List<String> alerts = FoodAlerts.warningsFor(p[0], data.profiles);
-        addSection(fields, alerts.isEmpty() ? "Allergy / diet notices" : "⚠ Possible allergy / diet conflict");
+        addSection(fields, alerts.isEmpty() ? "User notices" : "User conflict");
         WrapText warning = new WrapText(alerts.isEmpty()
                 ? "No name-based warnings found. Always verify ingredient and allergy labels."
                 : String.join("\n\n", alerts) + "\n\nCheck actual labels and cross-contact before serving.");
@@ -144,15 +137,31 @@ public class Food extends JPanel {
         scroller.getVerticalScrollBar().setUnitIncrement(16);
         details.add(scroller, BorderLayout.CENTER);
         JButton save = new RoundedButton("Save changes");
-        save.addActionListener(e -> updateFood(remaining.getText(), (String) manual.getSelectedItem(), resetBaseline.isSelected()));
-        details.add(save, BorderLayout.SOUTH);
+        save.addActionListener(e -> updateFood(remaining.getText(), chosenStatus(manual)));
+        save.setBackground(new Color(35, 116, 81)); save.setForeground(Color.WHITE);
+        JButton delete = new RoundedButton("Delete item");
+        delete.setForeground(new Color(160, 43, 43));
+        delete.setBackground(new Color(253, 236, 234));
+        delete.addActionListener(e -> deleteFood());
+        JPanel actions = new JPanel(new GridLayout(1, 2, 8, 0));
+        actions.add(save); actions.add(delete);
+        details.add(actions, BorderLayout.SOUTH);
         details.revalidate(); details.repaint();
         screens.show(content, "details");
     }
 
-    private static String escapeHtml(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    private void deleteFood() {
+        if (data == null || editingItem == null) return;
+        String original = editingItem;
+        String name = parts(original)[0];
+        AppScreens.confirm(this, "Delete pantry item", "Delete " + name + " from Pantry?", () -> {
+            data.foods.remove(original);
+            editingItem = null;
+            refreshData();
+            screens.show(content, "overview");
+        });
     }
+
     private static void addSection(JPanel fields, String text) {
         JLabel label = new JLabel(text);
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -167,42 +176,77 @@ public class Food extends JPanel {
         fields.add(Box.createVerticalStrut(8));
     }
 
-    private void updateFood(String quantityText, String manualChoice, boolean reset) {
+    private void updateFood(String quantityText, String manualChoice) {
         if (editingItem == null || data == null) return;
-        int index = data.foods.indexOf(editingItem);
+        String original = editingItem;
+        int index = data.foods.indexOf(original);
         if (index < 0) { screens.show(content, "overview"); return; }
         String[] p = parts(editingItem);
         String text = quantityText.trim();
         Double quantity = Stock.parse(text);
         if (!text.isEmpty() && quantity == null) {
-            JOptionPane.showMessageDialog(this, "Enter a nonnegative number for quantity."); return;
+            AppScreens.message(this, "Check quantity", "Enter a quantity of 0 or more."); return;
         }
-        if (quantity != null) {
-            Double baseline = Stock.parse(p[7]);
-            if (baseline == null || baseline <= 0 || reset) baseline = Math.max(1.0, quantity);
-            p[4] = Stock.format(quantity);
-            p[7] = Stock.format(baseline);
-            p[2] = Stock.status(quantity, baseline);
-        } else {
-            p[4] = ""; p[7] = "";
-            p[2] = "Full".equals(manualChoice) ? "Filled" : "Low".equals(manualChoice) ? "Running low" : "Empty";
+        p[4] = quantity == null ? "" : Stock.format(quantity);
+        p[7] = ""; // Kept in the record format for compatibility; no baseline is needed.
+        p[2] = storedStatus(manualChoice);
+        Runnable save = () -> {
+            int target = data.foods.indexOf(original);
+            if (target < 0) {
+                editingItem = null; refreshData(); screens.show(content, "overview"); return;
+            }
+            if (p[2].equals("Empty") && p[3].equals("Single use")) {
+                data.foods.remove(target);
+            } else {
+                data.foods.set(target, AppData.join(p));
+            }
+            if (p[3].equals("Staple") && !p[2].equals("Filled")
+                    && data.shoppingItems.stream().noneMatch(x -> shoppingName(x).equalsIgnoreCase(p[0]))) {
+                data.shoppingItems.add(Shopping.shoppingRequest(p));
+            }
+            editingItem = null;
+            refreshData();
+            screens.show(content, "overview");
+        };
+        if (!p[2].equals(parts(original)[2]) && (settings == null || settings.confirmStockChanges())) {
+            AppScreens.confirm(this, "Save stock change",
+                    "Save " + p[0] + " as " + displayStatus(p[2]) + "?", save);
+        } else save.run();
+    }
+
+    private static JPanel statusButtons(String selected) {
+        JPanel row = new JPanel(new GridLayout(1, 3, 8, 0));
+        row.setOpaque(false);
+        row.setPreferredSize(new Dimension(300, 46));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        ButtonGroup group = new ButtonGroup();
+        java.util.List<JToggleButton> buttons = new ArrayList<>();
+        Runnable restyle = () -> {
+            for (JToggleButton button : buttons) {
+                button.setBackground(button.isSelected() ? new Color(35, 116, 81) : new Color(231, 244, 236));
+                button.setForeground(button.isSelected() ? Color.WHITE : new Color(35, 116, 81));
+            }
+        };
+        for (String status : new String[]{"Full", "Low", "Empty"}) {
+            JToggleButton button = new JToggleButton(status);
+            button.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+            button.setActionCommand(status); button.setFocusPainted(false);
+            button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+            button.setBorder(BorderFactory.createLineBorder(new Color(208, 221, 212)));
+            group.add(button); buttons.add(button); row.add(button);
+            button.setSelected(status.equals(selected));
+            button.addActionListener(e -> restyle.run());
         }
-        if (settings == null || settings.confirmStockChanges()) {
-            if (JOptionPane.showConfirmDialog(this, "Save " + p[0] + " as " + displayStatus(p[2]) + "?",
-                    "Confirm", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
-        }
-        if (p[2].equals("Empty") && p[3].equals("Single use")) {
-            data.foods.remove(index);
-        } else {
-            data.foods.set(index, String.join(" | ", p));
-        }
-        if (p[3].equals("Staple") && !p[2].equals("Filled")
-                && data.shoppingItems.stream().noneMatch(x -> shoppingName(x).equalsIgnoreCase(p[0]))) {
-            data.shoppingItems.add(p[0]);
-        }
-        editingItem = null;
-        refreshData();
-        screens.show(content, "overview");
+        restyle.run(); row.putClientProperty("stockGroup", group);
+        return row;
+    }
+    private static String chosenStatus(JPanel row) {
+        ButtonModel selected = ((ButtonGroup)row.getClientProperty("stockGroup")).getSelection();
+        return selected == null ? "Full" : selected.getActionCommand();
+    }
+    private static String storedStatus(String label) {
+        return "Empty".equals(label) ? "Empty" : "Low".equals(label) ? "Running low" : "Filled";
     }
 
     private static JComponent legendItem(Color color, String text) {
@@ -217,8 +261,6 @@ public class Food extends JPanel {
     private JPanel createRow(String value, int index, boolean selected) {
         String[] p = parts(value);
         List<String> warnings = warningsAt(index);
-        Set<String> affected = new LinkedHashSet<>();
-        for (String warning : warnings) affected.add(warning.split(":", 2)[0]);
         String details = displayStatus(p[2]);
         if (settings == null || settings.showFoodDetails()) {
             if (!p[4].trim().isEmpty())
@@ -229,7 +271,7 @@ public class Food extends JPanel {
         boolean compact = settings != null && settings.compactFoodRows();
         int fontSize = settings != null && settings.largerListText() ? 17 : 15;
         String caution = warnings.isEmpty() ? null
-                : "⚠ Possible allergy / diet conflict: " + String.join(", ", affected);
+                : "User conflict";
         FoodRow row = new FoodRow(p[0], details, caution, p[2], fontSize, compact,
                 selected, list.getWidth());
         row.setToolTipText(warnings.isEmpty() ? details : String.join("; ", warnings));
@@ -238,30 +280,30 @@ public class Food extends JPanel {
 
     /** Draws status and wrapped copy directly, so Swing never clips a wrapped sublabel. */
     private static class FoodRow extends JPanel {
+        private static final long serialVersionUID = 1L;
         private final String name, details, caution, state;
-        private final int fontSize, suppliedWidth;
+        private final int suppliedWidth;
         private final boolean compact;
         private final Font titleFont, bodyFont;
         private final Color background;
         FoodRow(String name, String details, String caution, String state,
                 int fontSize, boolean compact, boolean selected, int suppliedWidth) {
             this.name = name; this.details = details; this.caution = caution;
-            this.state = state; this.fontSize = fontSize; this.compact = compact;
+            this.state = state; this.compact = compact;
             this.suppliedWidth = suppliedWidth;
             this.titleFont = new Font(Font.SANS_SERIF, Font.BOLD, fontSize);
-            this.bodyFont = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(12, fontSize - 2));
+            this.bodyFont = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(13, fontSize - 1));
             this.background = selected ? new Color(219, 240, 225)
                     : caution == null ? Color.WHITE : new Color(255, 248, 230);
             setBackground(background);
             setOpaque(false);
+            getAccessibleContext().setAccessibleName(name + ", " + details + (caution == null ? "" : ", " + caution));
         }
         private int availableWidth(int rowWidth) { return Math.max(110, rowWidth - 64); }
         private int padding() { return compact ? 8 : 12; }
         @Override public Dimension getPreferredSize() {
             int width = Math.max(190, suppliedWidth > 0 ? suppliedWidth - 4 : 310);
-            // The viewport may still be resizing when Swing caches row heights.
-            // Use a conservative measure so long text cannot be cut off.
-            int textWidth = Math.min(215, availableWidth(width));
+            int textWidth = availableWidth(width);
             FontMetrics t = getFontMetrics(titleFont);
             FontMetrics b = getFontMetrics(bodyFont);
             int titleH = wrap(name, t, textWidth).size() * t.getHeight();
@@ -338,6 +380,7 @@ public class Food extends JPanel {
 
     /** Painted vector dot instead of a font-specific emoji. */
     private static class StatusDot extends JComponent {
+        private static final long serialVersionUID = 1L;
         private final Color color;
         private final int diameter;
         StatusDot(Color color, String status, int diameter) {
@@ -368,19 +411,21 @@ public class Food extends JPanel {
 
     // Existing format: name | unused category | status | type | quantity | unit | storage
     static String[] parts(String item) {
-        String[] old = item.split(" \\| ", -1);
+        String[] old = AppData.fields(item);
         String[] p = {old[0], "Uncategorized", "Filled", "Single use", "", "", "Cabinet", ""};
         if (old.length >= 4) System.arraycopy(old, 0, p, 0, Math.min(old.length, p.length));
-        if (old.length == 7 && Stock.parse(p[4]) != null && Stock.parse(p[4]) > 0) p[7] = p[4];
         return p;
     }
-    static String shoppingName(String item) { return item.split(" \\| ", -1)[0]; }
+    static String shoppingName(String item) { return AppData.fields(item)[0]; }
 
     public void refreshData() {
         String selected = list.getSelectedValue();
         model.clear();
         visibleItems.clear();
-        if (data == null) return;
+        if (data == null) {
+            editingItem = null; inventoryHint.setText("Add your first item with Add item below.");
+            screens.show(content, "overview"); return;
+        }
         List<String> foods = new ArrayList<>(data.foods);
         if (settings != null && settings.alphabetizeFood())
             foods.sort(Comparator.comparing(f -> parts(f)[0].toLowerCase(java.util.Locale.ROOT)));
@@ -392,7 +437,14 @@ public class Food extends JPanel {
             visibleItems.add(item);
             model.addElement(item);
         }
+        inventoryHint.setText(model.isEmpty() ? "Add your first item with Add item below." : model.size() + " items  /  Tap an item for details");
         if (selected != null) list.setSelectedValue(selected, true);
+        // A purchase can update this item while another destination is active.
+        if (editingItem != null && !data.foods.contains(editingItem)) {
+            String name = parts(editingItem)[0];
+            editingItem = data.foods.stream().filter(raw -> parts(raw)[0].equalsIgnoreCase(name)).findFirst().orElse(null);
+            if (editingItem == null) screens.show(content, "overview"); else showDetail();
+        }
         list.revalidate();
         list.repaint();
     }
@@ -403,66 +455,47 @@ public class Food extends JPanel {
         return FoodAlerts.warningsFor(parts(visibleItems.get(index))[0], data.profiles);
     }
 
-    private void showWarnings() {
-        int index = list.getSelectedIndex();
-        if (index < 0) {
-            JOptionPane.showMessageDialog(this, "Select a food first.");
-            return;
-        }
-        List<String> warnings = warningsAt(index);
-        String food = parts(visibleItems.get(index))[0];
-        String message = warnings.isEmpty()
-                ? "No name-based conflicts found for " + food
-                    + ".\nAlways check full ingredient and allergen labels."
-                : "⚠ Possible conflicts for " + food + ":\n\n • "
-                    + String.join("\n • ", warnings)
-                    + "\n\nThese are name-based hints only. Check ingredients,"
-                    + " allergen labels and cross-contact before serving.";
-        JTextArea wrapped = new JTextArea(message, 9, 38);
-        wrapped.setEditable(false);
-        wrapped.setLineWrap(true);
-        wrapped.setWrapStyleWord(true);
-        wrapped.setOpaque(false);
-        JOptionPane.showMessageDialog(this, new JScrollPane(wrapped), "Food warnings",
-                warnings.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
-    }
-
     private void addFood() {
         if (data == null) return;
         JTextField name = new JTextField();
         JTextField quantity = new JTextField();
-        JComboBox<String> unit = new JComboBox<>(new String[]{
-                "pieces", "g", "kg", "oz", "lb", "mL", "L", "cups", "tbsp", "tsp", "packs", "bottles", "cans", "gallons", "other / none"});
+        JComboBox<String> unit = new JComboBox<>(Stock.units());
         JComboBox<String> type = new JComboBox<>(new String[]{"Choose type", "Staple", "Single use"});
         JComboBox<String> storage = new JComboBox<>(new String[]{"Fridge", "Freezer", "Cabinet"});
-        Object[] form = {"Name:", name, "Type:", type, "Full quantity (optional):", quantity,
-                "Unit:", unit, "Storage:", storage};
-        while (JOptionPane.showConfirmDialog(this, form, "Add food",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
+        JPanel manual = statusButtons("Full");
+        JPanel form = AppScreens.form();
+        AppScreens.field(form, "Name", name);
+        AppScreens.field(form, "Type", type);
+        AppScreens.field(form, "Quantity (optional)", quantity);
+        AppScreens.field(form, "Unit", unit);
+        AppScreens.field(form, "Storage", storage);
+        form.add(AppScreens.copy("Stock status"));
+        form.add(Box.createVerticalStrut(7));
+        form.add(manual);
+        form.add(Box.createVerticalStrut(12));
+        form.add(AppScreens.copy("Note: Staples stay in Pantry when empty. Low or empty staples are added to Shopping automatically."));
+        AppScreens.showForm(this, "Add pantry item", form, "Add to Pantry", () -> {
             String entered = name.getText().trim();
             String amount = quantity.getText().trim();
             Double numeric = Stock.parse(amount);
             boolean duplicate = data.foods.stream().anyMatch(item -> parts(item)[0].equalsIgnoreCase(entered));
-            if (entered.isEmpty() || entered.contains("|") || duplicate || type.getSelectedIndex() == 0
-                    || (!amount.isEmpty() && numeric == null)) {
-                JOptionPane.showMessageDialog(this, "Enter a unique name, a type, and a nonnegative quantity (or leave it blank). Do not use |.");
-                continue;
-            }
-            if (numeric != null && numeric == 0 && "Single use".equals(type.getSelectedItem())) {
-                JOptionPane.showMessageDialog(this, "A single-use food with zero quantity has no remaining stock. Add it to Shopping instead.");
-                continue;
-            }
-            String status = numeric == null ? "Filled" : Stock.status(numeric, Math.max(1, numeric));
-            String baseline = numeric == null ? "" : Stock.format(Math.max(1, numeric));
+            if (entered.isEmpty()) return "Enter a food name.";
+            if (duplicate) return "That food is already in your pantry.";
+            if (type.getSelectedIndex() == 0) return "Choose Staple or Single use.";
+            if (!amount.isEmpty() && numeric == null) return "Enter a quantity of 0 or more.";
+            String status = storedStatus(chosenStatus(manual));
+            if (status.equals("Empty") && "Single use".equals(type.getSelectedItem()))
+                return "Add empty single-use foods to Shopping.";
+            String baseline = "";
             String amountText = numeric == null ? "" : Stock.format(numeric);
-            String units = numeric == null || unit.getSelectedItem().equals("other / none") ? "" : unit.getSelectedItem().toString();
-            data.foods.add(String.join(" | ", entered, "Uncategorized", status,
+            String units = Stock.unitLabel(unit.getSelectedItem().toString());
+            data.foods.add(AppData.join(entered, "Uncategorized", status,
                     type.getSelectedItem().toString(), amountText, units, storage.getSelectedItem().toString(), baseline));
             if (type.getSelectedItem().equals("Staple") && !status.equals("Filled")
                     && data.shoppingItems.stream().noneMatch(x -> shoppingName(x).equalsIgnoreCase(entered)))
-                data.shoppingItems.add(entered);
+                data.shoppingItems.add(Shopping.shoppingRequest(parts(data.foods.get(data.foods.size() - 1))));
             refreshData();
-            return;
-        }
+            return null;
+        });
     }
 }

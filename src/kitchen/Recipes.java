@@ -2,7 +2,9 @@ package kitchen;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.net.URI;
+import java.io.IOException;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.util.*;
 import java.util.List;
 import javax.swing.*;
@@ -15,30 +17,56 @@ public class Recipes extends JPanel {
     private final CardLayout screens = new CardLayout();
     private final JPanel content = new JPanel(screens);
     private final DefaultListModel<RecipeService.Recipe> model = new DefaultListModel<>();
-    private final JList<RecipeService.Recipe> results = new JList<>(model);
-    private final JLabel message = new JLabel("Find meals using your food at home.", SwingConstants.CENTER);
-    private final JButton find = new RoundedButton("Find Recipes");
-    private final JLabel recipeTitle = new JLabel();
+    private final JList<RecipeService.Recipe> results = new JList<RecipeService.Recipe>(model) {
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+    };
+    private final WrapText message = new WrapText("Choose a recipe to get started.");
+    private final JButton filterButton = new RoundedButton("Filter");
+    private final JTextField queryField = new JTextField();
+    private final WrapText recipeTitle = new WrapText("");
     private final JLabel recipeCounts = new JLabel();
-    private final JTextArea instructions = new JTextArea();
-    private final JButton shop = new RoundedButton("Add Missing to Shopping");
-    private final JButton browser = new RoundedButton("Open Recipe Website");
-    private final Map<Integer, RecipeService.RecipeDetails> cache = new HashMap<>();
+    private final WrapText recipeNotice = new WrapText("");
+    private final WrapText instructions = new WrapText("");
+    private final JScrollPane detailScroll = new JScrollPane();
+    private final JButton shop = new RoundedButton("Add missing to Shopping");
+    private final JButton ingredientsButton = new RoundedButton("Check ingredients");
     private RecipeService.Recipe current;
     private RecipeService.RecipeDetails currentDetails;
-    private int requestSerial = 0;
+    private boolean showingDetail;
+    private boolean resettingSearch;
+    private int maximumMinutes = Integer.MAX_VALUE;
 
     public Recipes() {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(12, 12, 12, 12));
         JPanel browserPage = new JPanel(new BorderLayout(10, 10));
+        JPanel filters = AppScreens.form();
+        JPanel recipeHeader = new JPanel(new BorderLayout(12, 0));
+        recipeHeader.setOpaque(false);
+        recipeHeader.add(AppScreens.copy("Find your next meal."), BorderLayout.CENTER);
+        JButton addRecipe = new RoundedButton("Add recipe");
+        addRecipe.setIcon(AppScreens.icon(5, true));
+        addRecipe.addActionListener(e -> addRecipe());
+        recipeHeader.add(addRecipe, BorderLayout.EAST);
+        recipeHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+        filters.add(recipeHeader);
+        filters.add(Box.createVerticalStrut(12));
+        JPanel searchRow = new JPanel(new BorderLayout(8, 0));
+        searchRow.add(queryField, BorderLayout.CENTER);
+        filterButton.setPreferredSize(new Dimension(92, 44));
+        searchRow.add(filterButton, BorderLayout.EAST);
+        AppScreens.field(filters, "Search recipes or ingredients", searchRow);
+        queryField.getAccessibleContext().setAccessibleName("Search recipes or ingredients");
+        browserPage.add(filters, BorderLayout.NORTH);
         results.setFixedCellHeight(-1);
         results.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         results.setCellRenderer((list, recipe, index, selected, focused) -> {
             JPanel row = new JPanel(new BorderLayout(6, 4));
             row.setOpaque(true);
-            row.setBorder(new EmptyBorder(12, 13, 12, 13));
-            row.setBackground(selected ? new Color(223, 242, 229) : index % 2 == 0 ? Color.WHITE : new Color(248, 250, 248));
+            row.setBorder(new EmptyBorder(8, 10, 8, 10));
+            List<String> warnings = recipeWarnings(recipe);
+            row.setBackground(!warnings.isEmpty() ? (selected ? new Color(255, 237, 200) : new Color(255, 248, 230))
+                    : selected ? new Color(223, 242, 229) : index % 2 == 0 ? Color.WHITE : new Color(248, 250, 248));
             JTextArea name = new JTextArea(recipe.title);
             name.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
             name.setEditable(false); name.setLineWrap(true); name.setWrapStyleWord(true);
@@ -46,11 +74,26 @@ public class Recipes extends JPanel {
             int textWidth = Math.max(110, results.getWidth() - 45);
             name.setSize(textWidth, 10000);
             row.add(name, BorderLayout.NORTH);
-            JLabel counts = new JLabel("<html><span style='color:#48745c'>Have " + recipe.usedCount + "</span>"
-                    + "&nbsp;&nbsp; <span style='color:#b33333'>Missing " + recipe.missing.size() + "</span></html>");
-            row.add(counts, BorderLayout.CENTER);
-            row.setPreferredSize(new Dimension(Math.max(190, results.getWidth() - 4),
-                    Math.max(64, name.getPreferredSize().height + 42)));
+            JLabel counts = new JLabel("<html><span style='color:#48745c'>In pantry: " + recipe.usedCount + "</span>"
+                    + "&nbsp;&nbsp; <span style='color:#b33333'>To buy: " + recipe.missing.size() + "</span></html>");
+            counts.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+            JPanel metadata = new JPanel(new BorderLayout(8, 0)); metadata.setOpaque(false);
+            metadata.add(counts, BorderLayout.CENTER);
+            if (!warnings.isEmpty()) {
+                JLabel notice = new JLabel("User conflict");
+                notice.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+                notice.setForeground(new Color(151, 82, 13));
+                metadata.add(notice, BorderLayout.EAST);
+                row.setToolTipText(String.join("; ", warnings));
+            }
+            row.add(metadata, BorderLayout.CENTER);
+            int rowWidth = Math.max(190, results.getWidth() - 4);
+            row.setPreferredSize(new Dimension(rowWidth,
+                    Math.max(60, name.getPreferredSize().height + metadata.getPreferredSize().height + 20)));
+            row.getAccessibleContext().setAccessibleName(recipe.title + ", " + recipe.usedCount
+                    + " ingredients in pantry, " + recipe.missing.size() + " to buy" + (warnings.isEmpty() ? "" : ", User conflict"));
+            row.setSize(row.getPreferredSize());
+            row.doLayout(); metadata.doLayout();
             return row;
         });
         results.addComponentListener(new ComponentAdapter() {
@@ -69,55 +112,168 @@ public class Recipes extends JPanel {
             @Override public void actionPerformed(ActionEvent e) { openRecipe(results.getSelectedValue()); }
         });
         JScrollPane scroll = new JScrollPane(results);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(18);
         browserPage.add(scroll, BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(8, 8));
-        message.setFont(message.getFont().deriveFont(12f));
+        message.setFont(message.getFont().deriveFont(13f));
         bottom.add(message, BorderLayout.NORTH);
-        JPanel center = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        find.setPreferredSize(new Dimension(165, 43));
-        center.add(find);
-        bottom.add(center, BorderLayout.SOUTH);
         browserPage.add(bottom, BorderLayout.SOUTH);
 
         JPanel detail = new JPanel(new BorderLayout(10, 12));
         JButton back = new RoundedButton("← Back");
-        back.addActionListener(e -> { ++requestSerial; screens.show(content, "results"); });
-        JPanel top = new JPanel(new BorderLayout(0, 12));
+        back.addActionListener(e -> { showingDetail = false; screens.show(content, "results"); });
         JPanel backRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         backRow.add(back);
-        top.add(backRow, BorderLayout.NORTH);
-        JPanel header = new JPanel();
-        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        detail.add(backRow, BorderLayout.NORTH);
+        JPanel detailBody = AppScreens.form();
         recipeTitle.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-        recipeTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-        recipeCounts.setAlignmentX(Component.LEFT_ALIGNMENT);
-        header.add(recipeTitle);
-        header.add(Box.createVerticalStrut(9));
-        header.add(recipeCounts);
-        top.add(header, BorderLayout.CENTER);
-        detail.add(top, BorderLayout.NORTH);
-        instructions.setEditable(false);
-        instructions.setLineWrap(true); instructions.setWrapStyleWord(true);
+        recipeTitle.setForeground(new Color(32, 51, 44));
+        detailBody.add(recipeTitle);
+        detailBody.add(Box.createVerticalStrut(9));
+        detailBody.add(recipeCounts);
+        detailBody.add(Box.createVerticalStrut(8));
+        recipeNotice.setForeground(new Color(151, 82, 13));
+        recipeNotice.setBackground(new Color(255, 248, 230)); recipeNotice.setOpaque(true);
+        recipeNotice.setBorder(new EmptyBorder(8, 8, 8, 8));
+        recipeNotice.setVisible(false); detailBody.add(recipeNotice);
+        detailBody.add(Box.createVerticalStrut(12));
         instructions.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
-        instructions.setMargin(new Insets(14, 14, 14, 14));
-        detail.add(new JScrollPane(instructions), BorderLayout.CENTER);
+        instructions.setForeground(new Color(32, 51, 44));
+        detailBody.add(instructions);
+        detailScroll.setViewportView(detailBody);
+        detailScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        detailScroll.setBorder(BorderFactory.createEmptyBorder());
+        detailScroll.getVerticalScrollBar().setUnitIncrement(20);
+        detail.add(detailScroll, BorderLayout.CENTER);
         JPanel actions = new JPanel(new GridLayout(2, 1, 0, 8));
         shop.addActionListener(e -> addMissing());
-        browser.addActionListener(e -> openWebsite());
-        actions.add(shop); actions.add(browser);
+        ingredientsButton.addActionListener(e -> showIngredients());
+        actions.add(shop); actions.add(ingredientsButton);
         detail.add(actions, BorderLayout.SOUTH);
         content.add(browserPage, "results");
         content.add(detail, "detail");
         add(content, BorderLayout.CENTER);
         screens.show(content, "results");
-        find.addActionListener(e -> searchRecipes());
-        shop.setEnabled(false); browser.setEnabled(false);
+        filterButton.addActionListener(e -> chooseFilter());
+        queryField.addActionListener(e -> applyFilters());
+        queryField.getDocument().addDocumentListener(new DocumentListener() {
+            private void changed() { if (!resettingSearch && data != null) applyFilters(); }
+            public void insertUpdate(DocumentEvent e) { changed(); }
+            public void removeUpdate(DocumentEvent e) { changed(); }
+            public void changedUpdate(DocumentEvent e) { changed(); }
+        });
+        shop.setEnabled(false); ingredientsButton.setEnabled(false);
     }
 
-    public void setAppData(AppData data) { this.data = data; refreshData(); }
-    public void refreshData() { /* Results are refreshed only when Find Recipes is pressed. */ }
+    public void setAppData(AppData data) { this.data = data; searchRecipes(false); }
+    public void refreshData() { if (data != null) searchRecipes(true); }
+
+    private RecipeService service() {
+        return new RecipeService(data == null ? Collections.emptyList() : data.recipes);
+    }
+
+    private void addRecipe() {
+        if (data == null) return;
+        JTextField title = new JTextField();
+        JTextField minutes = new JTextField(), servings = new JTextField();
+        JTextArea ingredients = new JTextArea(4, 20), steps = new JTextArea(5, 20);
+        for (JTextArea area : new JTextArea[]{ingredients, steps}) {
+            area.setLineWrap(true); area.setWrapStyleWord(true);
+            area.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 15));
+            area.setMargin(new Insets(8, 10, 8, 10));
+            area.setBackground(new Color(250, 252, 250));
+        }
+        JPanel form = AppScreens.form();
+        AppScreens.field(form, "Recipe name", title);
+        AppScreens.field(form, "Preparation time (minutes)", minutes);
+        AppScreens.field(form, "Servings", servings);
+        JScrollPane ingredientInput = new JScrollPane(ingredients);
+        ingredientInput.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.field(form, "Ingredients (one name per line)", ingredientInput);
+        ingredientInput.setPreferredSize(new Dimension(280, 110));
+        ingredientInput.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
+        form.add(AppScreens.copy("Use names such as Tomato or Rice for pantry matching."));
+        form.add(Box.createVerticalStrut(12));
+        JScrollPane stepInput = new JScrollPane(steps);
+        stepInput.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.field(form, "Cooking steps (include quantities)", stepInput);
+        stepInput.setPreferredSize(new Dimension(280, 140));
+        stepInput.setMaximumSize(new Dimension(Integer.MAX_VALUE, 140));
+        AppScreens.showForm(this, "Add recipe", form, "Save recipe", () -> {
+            String name = title.getText().trim(), directions = steps.getText().trim();
+            if (name.isEmpty()) return "Enter a recipe name.";
+            int time, portions;
+            try { time = Integer.parseInt(minutes.getText().trim()); }
+            catch (NumberFormatException error) { return "Enter a whole number of minutes."; }
+            if (time <= 0) return "Preparation time must be greater than 0.";
+            try { portions = Integer.parseInt(servings.getText().trim()); }
+            catch (NumberFormatException error) { return "Enter a whole number of servings."; }
+            if (portions <= 0) return "Servings must be greater than 0.";
+            LinkedHashMap<String, String> unique = new LinkedHashMap<>();
+            for (String line : ingredients.getText().split("\\R")) {
+                String ingredient = line.trim();
+                if (!ingredient.isEmpty()) unique.putIfAbsent(ingredient.toLowerCase(Locale.ROOT), ingredient);
+            }
+            if (unique.isEmpty()) return "Add at least one ingredient.";
+            if (directions.isEmpty()) return "Add the cooking steps.";
+            try {
+                for (RecipeService.Recipe recipe : service().findByIngredients(Collections.emptyList()))
+                    if (recipe.title.equalsIgnoreCase(name)) return "A recipe with that name already exists.";
+            } catch (Exception error) { return "Couldn't save the recipe. Try again."; }
+            int id = 1000 + data.recipes.size();
+            data.recipes.add(AppData.join(name, Integer.toString(time), Integer.toString(portions),
+                    String.join("\n", unique.values()), directions));
+            resettingSearch = true;
+            queryField.setText("");
+            resettingSearch = false;
+            maximumMinutes = Integer.MAX_VALUE;
+            filterButton.setText("Filter");
+            searchRecipes(false);
+            for (int i = 0; i < model.size(); i++) if (model.get(i).id == id) {
+                results.setSelectedIndex(i); openRecipe(model.get(i)); break;
+            }
+            return null;
+        });
+    }
+
+    private void applyFilters() { searchRecipes(false); }
+
+    private void chooseFilter() {
+        JComboBox<String> time = new JComboBox<>(new String[]{"Any time", "Up to 15 minutes", "Up to 30 minutes"});
+        time.setSelectedIndex(maximumMinutes == 15 ? 1 : maximumMinutes == 30 ? 2 : 0);
+        JPanel form = AppScreens.form();
+        AppScreens.field(form, "Preparation time", time);
+        AppScreens.showForm(this, "Filter recipes", form, "Apply filter", () -> {
+            maximumMinutes = time.getSelectedIndex() == 1 ? 15 : time.getSelectedIndex() == 2 ? 30 : Integer.MAX_VALUE;
+            filterButton.setText(maximumMinutes == Integer.MAX_VALUE ? "Filter" : "≤ " + maximumMinutes + " min");
+            applyFilters();
+            return null;
+        });
+    }
+
+    private List<String> recipeWarnings(RecipeService.Recipe recipe) {
+        Set<String> warnings = new LinkedHashSet<>();
+        if (data == null) return new ArrayList<>();
+        List<String> ingredients = new ArrayList<>(recipe.used); ingredients.addAll(recipe.missing);
+        for (String ingredient : ingredients) warnings.addAll(FoodAlerts.warningsFor(ingredient, data.profiles));
+        return new ArrayList<>(warnings);
+    }
+    private void updateRecipeNotice(RecipeService.Recipe recipe) {
+        List<String> warnings = recipeWarnings(recipe);
+        recipeNotice.setBackground(new Color(255, 248, 230));
+        recipeNotice.setForeground(new Color(151, 82, 13));
+        recipeNotice.setText(warnings.isEmpty() ? "" : "User conflict");
+        recipeNotice.setVisible(!warnings.isEmpty());
+    }
+
+    private void updateCounts() {
+        updateRecipeNotice(current);
+        recipeCounts.setText("<html><span style='color:#48745c'>In pantry: " + current.usedCount + "</span>"
+                + "&nbsp;&nbsp; <span style='color:#b33333'>To buy: " + current.missing.size() + "</span></html>");
+        recipeTitle.getParent().invalidate();
+    }
 
     private List<String> availableIngredients() {
         List<String> names = new ArrayList<>();
@@ -129,103 +285,92 @@ public class Recipes extends JPanel {
         return names;
     }
 
-    private void searchRecipes() {
-        List<String> ingredients = availableIngredients();
-        if (ingredients.isEmpty()) { message.setText("Add food before searching."); return; }
-        if (!RecipeConfig.isConfigured()) {
-            message.setText("Recipe service is not configured. Ask the app developer.");
-            return;
+    /** Small local catalogue: synchronous loading avoids stale callbacks and unnecessary caches. */
+    private void searchRecipes(boolean preserveDetail) {
+        if (data == null) return;
+        int previousId = current == null ? -1 : current.id;
+        boolean keepDetail = preserveDetail && showingDetail;
+        RecipeService service = service();
+        String query = queryField.getText().trim().toLowerCase(Locale.ROOT);
+        try {
+            List<RecipeService.Recipe> all = service.findByIngredients(availableIngredients());
+            List<RecipeService.Recipe> filtered = new ArrayList<>();
+            for (RecipeService.Recipe recipe : all) {
+                RecipeService.RecipeDetails details = service.getDetails(recipe.id);
+                if (details.minutes <= maximumMinutes && (recipe.title.toLowerCase(Locale.ROOT).contains(query)
+                        || details.ingredients.stream().anyMatch(name -> name.toLowerCase(Locale.ROOT).contains(query))))
+                    filtered.add(recipe);
+            }
+            filtered.sort(Comparator.comparingInt((RecipeService.Recipe recipe) -> recipe.missing.size())
+                    .thenComparing(Comparator.comparingInt((RecipeService.Recipe recipe) -> recipe.usedCount).reversed())
+                    .thenComparing(recipe -> recipe.title.toLowerCase(Locale.ROOT)));
+            model.clear();
+            for (RecipeService.Recipe recipe : filtered) model.addElement(recipe);
+            results.setCellRenderer(results.getCellRenderer());
+            message.setText(filtered.isEmpty() ? "No matches. Try another name or filter."
+                    : filtered.size() + " recipes · tap one for ingredients and steps.");
+            if (keepDetail) {
+                for (RecipeService.Recipe recipe : all) if (recipe.id == previousId) { openRecipe(recipe); return; }
+            }
+            showingDetail = false; current = null; currentDetails = null;
+            screens.show(content, "results");
+        } catch (IOException invalidData) {
+            message.setText("Couldn't load recipes. Try another search.");
         }
-        ++requestSerial;
-        model.clear(); cache.clear(); current = null; currentDetails = null;
-        find.setEnabled(false); find.setText("Searching...");
-        message.setText("Searching...");
-        RecipeService service = new RecipeService(RecipeConfig.apiKey());
-        new SwingWorker<List<RecipeService.Recipe>, Void>() {
-            @Override protected List<RecipeService.Recipe> doInBackground() throws Exception {
-                return service.findByIngredients(ingredients);
-            }
-            @Override protected void done() {
-                find.setEnabled(true); find.setText("Find Recipes");
-                try {
-                    List<RecipeService.Recipe> found = get();
-                    found.sort(Comparator.comparingInt((RecipeService.Recipe r) -> r.missing.size())
-                            .thenComparing(Comparator.comparingInt((RecipeService.Recipe r) -> r.usedCount).reversed())
-                            .thenComparing(r -> r.title.toLowerCase(Locale.ROOT)));
-                    for (RecipeService.Recipe recipe : found) model.addElement(recipe);
-                    message.setText(found.isEmpty() ? "No recipes found. Try different foods." : "Tap a recipe to view it.");
-                } catch (Exception e) { message.setText("Search failed: " + errorMessage(e)); }
-            }
-        }.execute();
     }
 
     private void openRecipe(RecipeService.Recipe recipe) {
         if (recipe == null) return;
-        int serial = ++requestSerial;
-        current = recipe; currentDetails = null;
-        recipeTitle.setText("<html><body style='width:230px'>" + html(recipe.title) + "</body></html>");
-        recipeCounts.setText("<html><span style='color:#48745c'>Have " + recipe.usedCount + "</span>"
-                + "&nbsp;&nbsp; <span style='color:#b33333'>Missing " + recipe.missing.size() + "</span></html>");
-        instructions.setText("Loading instructions...");
-        shop.setEnabled(true); browser.setEnabled(true);
-        screens.show(content, "detail");
-        RecipeService.RecipeDetails cached = cache.get(recipe.id);
-        if (cached != null) { displayRecipe(cached); return; }
-        new SwingWorker<RecipeService.RecipeDetails, Void>() {
-            @Override protected RecipeService.RecipeDetails doInBackground() throws Exception {
-                return new RecipeService(RecipeConfig.apiKey()).getDetails(recipe.id);
-            }
-            @Override protected void done() {
-                if (requestSerial != serial || current != recipe) return;
-                try {
-                    RecipeService.RecipeDetails full = get(); cache.put(recipe.id, full); displayRecipe(full);
-                } catch (Exception e) { instructions.setText("Instructions unavailable: " + errorMessage(e)
-                        + "\n\nYou can still open the recipe website."); }
-            }
-        }.execute();
+        try {
+            RecipeService.RecipeDetails details = service().getDetails(recipe.id);
+            current = recipe; showingDetail = true;
+            recipeTitle.setText(recipe.title);
+            updateCounts();
+            displayRecipe(details);
+            shop.setEnabled(!recipe.missing.isEmpty()); ingredientsButton.setEnabled(true);
+            results.setSelectedValue(recipe, true);
+            screens.show(content, "detail");
+            detailScroll.getVerticalScrollBar().setValue(0);
+        } catch (IOException invalidData) {
+            AppScreens.message(this, "Recipe unavailable", "Return to the list and choose another recipe.");
+        }
     }
 
     private void displayRecipe(RecipeService.RecipeDetails full) {
         currentDetails = full;
-        String text = full.instructions == null ? "" : full.instructions
-                .replaceAll("<[^>]*>", " ").replace("&nbsp;", " ").replace("&amp;", "&")
-                .replace("&quot;", "\"").trim();
+        String text = full.instructions == null ? "" : full.instructions.trim();
+        List<String> conflicts = current == null ? Collections.emptyList() : recipeWarnings(current);
         instructions.setText("Ready in " + full.minutes + " min     •     Serves " + full.servings
-                + "\n\n" + (text.isEmpty() ? "Visit the recipe website for instructions." : text)
-                + "\n\nNote: Recipes are not screened for household allergies. Verify the ingredients before cooking.");
+                + (conflicts.isEmpty() ? "" : "\n\n" + String.join("\n", conflicts))
+                + "\n\n" + (text.isEmpty() ? "No instructions are bundled for this recipe." : text)
+                + "\n\nNote: Pantry matches use names. Check amounts and ingredient labels.");
         instructions.setCaretPosition(0);
     }
 
-    private static String html(String input) { return input.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"); }
-    private static String errorMessage(Exception error) {
-        Throwable cause = error;
-        while (cause.getCause() != null) cause = cause.getCause();
-        return cause.getMessage() == null ? cause.toString() : cause.getMessage();
-    }
     private void addMissing() {
         if (current == null || data == null) return;
         int added = 0;
         for (String raw : current.missing) {
             String name = raw.trim();
-            if (name.isEmpty() || name.contains("|")) continue;
+            if (name.isEmpty()) continue;
             if (data.shoppingItems.stream().noneMatch(x -> Food.shoppingName(x).equalsIgnoreCase(name))) {
-                data.shoppingItems.add(name); added++;
+                data.shoppingItems.add(AppData.encode(name)); added++;
             }
         }
-        JOptionPane.showMessageDialog(this, added + " item(s) added to Shopping.");
+        AppScreens.message(this, "Shopping updated", added == 0 ? "These ingredients are already on your list."
+                : added + (added == 1 ? " ingredient added to Shopping." : " ingredients added to Shopping."));
     }
-    private void openWebsite() {
-        if (current == null) return;
-        String url = currentDetails != null ? currentDetails.sourceUrl : null;
-        if (url == null || url.isEmpty()) {
-            url = "https://spoonacular.com/recipes/" + current.title.toLowerCase(Locale.ROOT)
-                    .replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "") + "-" + current.id;
+    private void showIngredients() {
+        if (currentDetails == null) {
+            AppScreens.message(this, "Ingredients", "Open a recipe to view its ingredients.");
+            return;
         }
-        try {
-            URI uri = URI.create(url);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme()))
-                throw new IllegalArgumentException("Unsupported website URL");
-            Desktop.getDesktop().browse(uri);
-        } catch (Exception e) { JOptionPane.showMessageDialog(this, "Couldn't open website: " + e.getMessage()); }
+        JPanel body = AppScreens.form();
+        for (String name : currentDetails.ingredients) {
+            body.add(AppScreens.copy(name + (current.used.contains(name) ? " — in pantry" : " — to buy")));
+            body.add(Box.createVerticalStrut(10));
+        }
+        body.add(AppScreens.copy("Note: Check that you have enough. Quantities are listed in the cooking steps."));
+        AppScreens.showForm(this, "Recipe ingredients", body, "Back to recipe", () -> null);
     }
 }
