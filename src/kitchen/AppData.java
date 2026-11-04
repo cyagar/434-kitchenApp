@@ -32,12 +32,10 @@ public class AppData {
     }
 
     public static String item(String name, String type, String quantity, String unit, String storage, String full, String status) {
-        // Status is explicit. Quantity and the legacy full-amount field do not determine it.
         return join(name, "Uncategorized", status, type, quantity, unit, storage, full);
     }
 
-    // Keep the team's delimited records, escaping only fields that could contain a delimiter.
-    // Ordinary old records are unchanged. Text such as "Milk | oat" round-trips safely.
+    // Keep the records, escaping only fields that could contain a delimiter.
     public static String encode(String text) {
         if (!text.contains("|") && !text.startsWith(TEXT_PREFIX)) return text;
         return TEXT_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(text.getBytes(StandardCharsets.UTF_8));

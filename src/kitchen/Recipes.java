@@ -10,7 +10,7 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-/** Two-stage recipe discovery: sorted, tappable results and a detail page. */
+// Recipe discovery, sorted, tappable results and a detail page
 public class Recipes extends JPanel {
     private static final long serialVersionUID = 1L;
     private AppData data;
@@ -285,7 +285,7 @@ public class Recipes extends JPanel {
         return names;
     }
 
-    /** Small local catalogue: synchronous loading avoids stale callbacks and unnecessary caches. */
+    // Small local catalogue
     private void searchRecipes(boolean preserveDetail) {
         if (data == null) return;
         int previousId = current == null ? -1 : current.id;
