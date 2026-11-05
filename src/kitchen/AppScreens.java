@@ -52,13 +52,8 @@ public final class AppScreens {
         Component previous = root.getGlassPane();
         boolean previousVisible = previous.isVisible();
         Component previousFocus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
-        JPanel overlay = new JPanel(new GridBagLayout()) {
-            @Override protected void paintComponent(Graphics g) {
-                g.setColor(new Color(20, 37, 28, 110)); g.fillRect(0, 0, getWidth(), getHeight());
-                super.paintComponent(g);
-            }
-        };
-        overlay.setOpaque(false);
+        JPanel overlay = new JPanel(new GridBagLayout());
+        overlay.setBackground(new Color(247, 249, 247));
         // Intercept clicks outside the sheet, so underlying actions cannot fire.
         overlay.addMouseListener(new MouseAdapter() { });
         overlay.addMouseMotionListener(new MouseMotionAdapter() { });
@@ -148,6 +143,13 @@ public final class AppScreens {
     public static Icon icon(int kind, boolean selected) {
         if (kind < 0 || kind >= ICON_NAMES.length) return null;
         String path = "/kitchen/icons/" + ICON_NAMES[kind] + (selected ? "-active" : "") + ".png";
+        return loadIcon(path);
+    }
+    public static Icon statusIcon(String status) {
+        String name = "Empty".equals(status) ? "empty" : "Full".equals(status) ? "full" : "low";
+        return loadIcon("/kitchen/icons/status-" + name + ".png");
+    }
+    private static Icon loadIcon(String path) {
         if (ICON_CACHE.containsKey(path)) return ICON_CACHE.get(path);
         java.net.URL url = AppScreens.class.getResource(path);
         if (url == null) {
