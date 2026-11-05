@@ -99,7 +99,7 @@ public class KitchenApp {
             button.setVerticalTextPosition(SwingConstants.BOTTOM);
             button.setHorizontalTextPosition(SwingConstants.CENTER);
             button.setIconTextGap(5);
-            button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+            button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
             button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             button.setFocusPainted(false);
             button.setBorder(new EmptyBorder(7, 1, 7, 1));
@@ -129,9 +129,22 @@ public class KitchenApp {
             navButtons[i].setBackground(Color.WHITE);
             navButtons[i].setForeground(MUTED);
         }
+        // Settings is not a nav tab: clear the highlight while it is open and restore it on Back.
+        preferences.addActionListener(e -> {
+            for (int j = 0; j < navButtons.length; j++) {
+                navButtons[j].setIcon(AppScreens.icon(j, false));
+                navButtons[j].setBackground(Color.WHITE);
+                navButtons[j].setForeground(MUTED);
+            }
+        });
+        settingsBack.addActionListener(e -> navButtons[activePage[0]].doClick(0));
         root.add(nav, BorderLayout.SOUTH);
 
-        return root;
+        // While typing, the keyboard takes the place of the bottom navigation, as on a real tablet.
+        JPanel screen = new JPanel(new BorderLayout());
+        screen.add(root, BorderLayout.CENTER);
+        screen.add(new TabletKeyboard(nav), BorderLayout.SOUTH);
+        return screen;
     }
 
     private static void configureDefaults() {
@@ -146,7 +159,7 @@ public class KitchenApp {
         UIManager.put("ComboBox.selectionForeground", Color.WHITE);
         UIManager.put("Button.gradient", null);
         UIManager.put("CheckBox.gradient", null);
-        UIManager.put("TextField.border", new CompoundBorder(new LineBorder(new Color(208, 221, 212), 1, true), new EmptyBorder(8, 9, 8, 9)));
+        UIManager.put("TextField.border", new CompoundBorder(new LineBorder(new Color(102, 117, 110), 1, true), new EmptyBorder(8, 9, 8, 9)));
         UIManager.put("Panel.background", Color.WHITE);
         UIManager.put("Label.foreground", INK);
         UIManager.put("TextField.foreground", INK);
@@ -235,6 +248,11 @@ public class KitchenApp {
         JScrollPane scroll = new JScrollPane(preferences);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(16);
+        // Settings always opens at its first option, even after scrolling down on the last visit.
+        scroll.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing())
+                scroll.getVerticalScrollBar().setValue(0);
+        });
         body.add(scroll, BorderLayout.CENTER);
         return body;
     }

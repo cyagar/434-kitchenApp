@@ -18,6 +18,14 @@ public final class Stock {
     public static String unitLabel(String choice) {
         return choice == null || choice.equals("other / none") ? "" : choice;
     }
+    // Unit names are stored in the plural; a quantity of exactly 1 reads as singular.
+    public static String withUnit(String quantity, String unit) {
+        String name = unit.trim();
+        if (name.isEmpty()) return quantity;
+        Double amount = parse(quantity);
+        boolean one = amount != null && amount == 1 && name.endsWith("s");
+        return quantity + " " + (one ? name.substring(0, name.length() - 1) : name);
+    }
 
     public static String format(double value) {
         return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();

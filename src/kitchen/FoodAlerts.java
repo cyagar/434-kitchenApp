@@ -94,7 +94,7 @@ public final class FoodAlerts {
         String a = singular(normalize(allergy).replaceAll("^(allergic to|allergy to) ", ""));
         if (a.isEmpty()) return false;
         if (has(a, "peanut", "groundnut")) return containsAny(food, PEANUTS);
-        if (has(a, "tree nut", "nuts", "nut allergy")) return containsAny(food, TREE_NUTS) || containsAny(food, PEANUTS);
+        if (has(a, "tree nut", "nut", "nuts", "nut allergy")) return containsAny(food, TREE_NUTS) || containsAny(food, PEANUTS);
         if (has(a, "milk", "dairy", "lactose")) return containsAny(food, DAIRY);
         if (has(a, "egg")) return containsAny(food, EGGS);
         if (has(a, "soy", "soya")) return containsAny(food, SOY);

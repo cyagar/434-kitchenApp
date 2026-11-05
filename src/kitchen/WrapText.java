@@ -15,6 +15,8 @@ public final class WrapText extends JTextArea {
         setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
         setForeground(new Color(102, 117, 110));
     }
+    // The hidden caret must not scroll the page that contains this read-only text.
+    @Override public void scrollRectToVisible(Rectangle r) { }
     @Override public Dimension getMaximumSize() {
         return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
     }

@@ -10,7 +10,7 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-// Recipe discovery, sorted, tappable results and a detail page
+/** Two-stage recipe discovery: sorted, tappable results and a detail page. */
 public class Recipes extends JPanel {
     private static final long serialVersionUID = 1L;
     private AppData data;
@@ -53,7 +53,7 @@ public class Recipes extends JPanel {
         filters.add(Box.createVerticalStrut(12));
         JPanel searchRow = new JPanel(new BorderLayout(8, 0));
         searchRow.add(queryField, BorderLayout.CENTER);
-        filterButton.setPreferredSize(new Dimension(92, 44));
+        filterButton.setPreferredSize(new Dimension(104, 44));
         searchRow.add(filterButton, BorderLayout.EAST);
         AppScreens.field(filters, "Search recipes or ingredients", searchRow);
         queryField.getAccessibleContext().setAccessibleName("Search recipes or ingredients");
@@ -79,17 +79,23 @@ public class Recipes extends JPanel {
             counts.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
             JPanel metadata = new JPanel(new BorderLayout(8, 0)); metadata.setOpaque(false);
             metadata.add(counts, BorderLayout.CENTER);
+            int reasonHeight = 0;
             if (!warnings.isEmpty()) {
-                JLabel notice = new JLabel("User conflict");
-                notice.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-                notice.setForeground(new Color(151, 82, 13));
-                metadata.add(notice, BorderLayout.EAST);
+                // A tablet has no hover, so the reason is shown on the row itself.
+                JTextArea reason = new JTextArea(String.join("; ", warnings));
+                reason.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+                reason.setForeground(new Color(151, 82, 13));
+                reason.setEditable(false); reason.setLineWrap(true); reason.setWrapStyleWord(true);
+                reason.setOpaque(false); reason.setFocusable(false);
+                reason.setSize(textWidth, 10000);
+                reasonHeight = reason.getPreferredSize().height + 4;
+                row.add(reason, BorderLayout.SOUTH);
                 row.setToolTipText(String.join("; ", warnings));
             }
             row.add(metadata, BorderLayout.CENTER);
             int rowWidth = Math.max(190, results.getWidth() - 4);
             row.setPreferredSize(new Dimension(rowWidth,
-                    Math.max(60, name.getPreferredSize().height + metadata.getPreferredSize().height + 20)));
+                    Math.max(60, name.getPreferredSize().height + metadata.getPreferredSize().height + reasonHeight + 20)));
             row.getAccessibleContext().setAccessibleName(recipe.title + ", " + recipe.usedCount
                     + " ingredients in pantry, " + recipe.missing.size() + " to buy" + (warnings.isEmpty() ? "" : ", User conflict"));
             row.setSize(row.getPreferredSize());
@@ -191,6 +197,7 @@ public class Recipes extends JPanel {
         AppScreens.field(form, "Servings", servings);
         JScrollPane ingredientInput = new JScrollPane(ingredients);
         ingredientInput.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.passWheelToPage(ingredientInput);
         AppScreens.field(form, "Ingredients (one name per line)", ingredientInput);
         ingredientInput.setPreferredSize(new Dimension(280, 110));
         ingredientInput.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
@@ -198,6 +205,7 @@ public class Recipes extends JPanel {
         form.add(Box.createVerticalStrut(12));
         JScrollPane stepInput = new JScrollPane(steps);
         stepInput.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.passWheelToPage(stepInput);
         AppScreens.field(form, "Cooking steps (include quantities)", stepInput);
         stepInput.setPreferredSize(new Dimension(280, 140));
         stepInput.setMaximumSize(new Dimension(Integer.MAX_VALUE, 140));
@@ -285,7 +293,7 @@ public class Recipes extends JPanel {
         return names;
     }
 
-    // Small local catalogue
+    /** Small local catalogue: synchronous loading avoids stale callbacks and unnecessary caches. */
     private void searchRecipes(boolean preserveDetail) {
         if (data == null) return;
         int previousId = current == null ? -1 : current.id;
@@ -308,7 +316,7 @@ public class Recipes extends JPanel {
             for (RecipeService.Recipe recipe : filtered) model.addElement(recipe);
             results.setCellRenderer(results.getCellRenderer());
             message.setText(filtered.isEmpty() ? "No matches. Try another name or filter."
-                    : filtered.size() + " recipes · tap one for ingredients and steps.");
+                    : filtered.size() + (filtered.size() == 1 ? " recipe" : " recipes") + " · tap one for ingredients and steps.");
             if (keepDetail) {
                 for (RecipeService.Recipe recipe : all) if (recipe.id == previousId) { openRecipe(recipe); return; }
             }

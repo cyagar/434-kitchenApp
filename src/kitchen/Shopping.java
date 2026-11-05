@@ -66,7 +66,7 @@ public class Shopping extends JPanel {
             String[] details = Food.parts(value);
             boolean detailed = AppData.fields(value).length >= 7;
             String description = detailed
-                    ? (details[4].isEmpty() ? "Quantity not set" : details[4] + " " + details[5]) + "  /  " + details[6] + "  /  " + details[3]
+                    ? (details[4].isEmpty() ? "Quantity not set" : Stock.withUnit(details[4], details[5])) + "  /  " + details[6] + "  /  " + details[3]
                     : "Choose quantity and storage when moving to Pantry";
             JTextArea name = new JTextArea(Food.shoppingName(value) + "\n" + description);
             name.setFont(new Font(Font.SANS_SERIF, Font.PLAIN,
@@ -173,7 +173,7 @@ public class Shopping extends JPanel {
         movePurchased.setEnabled(!checked.isEmpty());
         removeSelected.setEnabled(!checked.isEmpty());
         movePurchased.setText("Move purchased to Pantry" + (checked.isEmpty() ? "" : " (" + checked.size() + ")"));
-        listSummary.setText(model.isEmpty() ? "Your shopping list is empty." : model.size() + " items / " + checked.size() + " purchased");
+        listSummary.setText(model.isEmpty() ? "Your shopping list is empty." : model.size() + (model.size() == 1 ? " item / " : " items / ") + checked.size() + " purchased");
     }
 
     private void toggle(String item) {

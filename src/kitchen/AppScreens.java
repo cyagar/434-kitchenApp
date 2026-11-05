@@ -28,6 +28,16 @@ public final class AppScreens {
         input.setPreferredSize(new Dimension(280, input instanceof JTextArea ? 90 : 44));
         form.add(input); form.add(Box.createVerticalStrut(16));
     }
+    /** A small text box inside a scrolling page hands the wheel or trackpad to the page once it has nothing left to scroll. */
+    public static void passWheelToPage(JScrollPane box) {
+        box.addMouseWheelListener(e -> {
+            JScrollBar bar = box.getVerticalScrollBar();
+            boolean canScroll = bar.isVisible() && (e.getPreciseWheelRotation() < 0 ? bar.getValue() > bar.getMinimum()
+                    : bar.getValue() + bar.getVisibleAmount() < bar.getMaximum());
+            Container page = SwingUtilities.getAncestorOfClass(JScrollPane.class, box);
+            if (!canScroll && page != null) page.dispatchEvent(SwingUtilities.convertMouseEvent(box, e, page));
+        });
+    }
     public static JTextArea copy(String text) {
         JTextArea copy = new WrapText(text);
         copy.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
@@ -42,8 +52,13 @@ public final class AppScreens {
         Component previous = root.getGlassPane();
         boolean previousVisible = previous.isVisible();
         Component previousFocus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
-        JPanel overlay = new JPanel(new GridBagLayout());
-        overlay.setBackground(new Color(247, 249, 247));
+        JPanel overlay = new JPanel(new GridBagLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                g.setColor(new Color(20, 37, 28, 110)); g.fillRect(0, 0, getWidth(), getHeight());
+                super.paintComponent(g);
+            }
+        };
+        overlay.setOpaque(false);
         // Intercept clicks outside the sheet, so underlying actions cannot fire.
         overlay.addMouseListener(new MouseAdapter() { });
         overlay.addMouseMotionListener(new MouseMotionAdapter() { });
@@ -83,6 +98,10 @@ public final class AppScreens {
         GridBagConstraints constraints = new GridBagConstraints(); constraints.weightx = 1; constraints.weighty = 1;
         constraints.fill = GridBagConstraints.BOTH; constraints.insets = new Insets(8, 8, 8, 8);
         overlay.add(sheet, constraints);
+        // The sheet covers the app window's keyboard, so it shows its own below the sheet.
+        GridBagConstraints keys = new GridBagConstraints(); keys.gridx = 0; keys.gridy = 1;
+        keys.weightx = 1; keys.fill = GridBagConstraints.HORIZONTAL;
+        overlay.add(new TabletKeyboard(null), keys);
         overlay.setFocusCycleRoot(true);
         overlay.setFocusTraversalPolicy(new LayoutFocusTraversalPolicy());
         overlay.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke("ESCAPE"), "close");
@@ -129,13 +148,6 @@ public final class AppScreens {
     public static Icon icon(int kind, boolean selected) {
         if (kind < 0 || kind >= ICON_NAMES.length) return null;
         String path = "/kitchen/icons/" + ICON_NAMES[kind] + (selected ? "-active" : "") + ".png";
-        return loadIcon(path);
-    }
-    public static Icon statusIcon(String status) {
-        String name = "Empty".equals(status) ? "empty" : "Full".equals(status) ? "full" : "low";
-        return loadIcon("/kitchen/icons/status-" + name + ".png");
-    }
-    private static Icon loadIcon(String path) {
         if (ICON_CACHE.containsKey(path)) return ICON_CACHE.get(path);
         java.net.URL url = AppScreens.class.getResource(path);
         if (url == null) {

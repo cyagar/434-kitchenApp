@@ -18,6 +18,7 @@ public class Profiles extends JPanel {
     private final JTextArea allergiesField = new JTextArea(4, 16);
     private final JTextArea dietField = new JTextArea(4, 16);
     private final JLabel editingTitle = new JLabel("Person details");
+    private JScrollPane editScroll;
 
     public Profiles() {
         setLayout(new BorderLayout());
@@ -68,6 +69,7 @@ public class Profiles extends JPanel {
         configureArea(allergiesField);
         JScrollPane allergiesScroll = new JScrollPane(allergiesField);
         allergiesScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.passWheelToPage(allergiesScroll);
         fields.add(allergiesScroll);
         fields.add(Box.createVerticalStrut(20));
 
@@ -76,11 +78,12 @@ public class Profiles extends JPanel {
         configureArea(dietField);
         JScrollPane dietScroll = new JScrollPane(dietField);
         dietScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        AppScreens.passWheelToPage(dietScroll);
         fields.add(dietScroll);
         fields.add(Box.createVerticalStrut(15));
         addDescription(fields, "\u26A0 Pantry alerts are possible matches based on names. Always check full ingredient labels.");
 
-        JScrollPane editScroll = new JScrollPane(fields);
+        editScroll = new JScrollPane(fields);
         editScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         editScroll.setBorder(BorderFactory.createEmptyBorder());
         editScroll.getVerticalScrollBar().setUnitIncrement(16);
@@ -173,6 +176,7 @@ public class Profiles extends JPanel {
         dietField.setCaretPosition(0);
         editingTitle.setText("Edit " + values[0]);
         screens.show(content, "details");
+        editScroll.getVerticalScrollBar().setValue(0);
     }
 
     private void goBack() {
@@ -205,6 +209,7 @@ public class Profiles extends JPanel {
         editingTitle.setText("Add a person");
         removeButton.setEnabled(false);
         screens.show(content, "details");
+        editScroll.getVerticalScrollBar().setValue(0);
     }
 
     private boolean validName(String name, int skipIndex) {

@@ -11,9 +11,12 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
-// Pantry inventory with image-based availability icons and household notices.
+// Food inventory, name-based allergy notices and a three-color availability dot.
 public class Food extends JPanel {
     private static final long serialVersionUID = 1L;
+    private static final Color FULL = new Color(34, 153, 91);
+    private static final Color LOW = new Color(227, 163, 34);
+    private static final Color EMPTY = new Color(211, 68, 69);
 
     private AppData data;
     private AppSettings settings;
@@ -73,9 +76,9 @@ public class Food extends JPanel {
         plusRow.add(plus);
         bottom.add(plusRow, BorderLayout.NORTH);
         JPanel legend = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
-        legend.add(legendItem("Full"));
-        legend.add(legendItem("Low"));
-        legend.add(legendItem("Empty"));
+        legend.add(legendItem(FULL, "Full"));
+        legend.add(legendItem(LOW, "Low"));
+        legend.add(legendItem(EMPTY, "Empty"));
         bottom.add(legend, BorderLayout.SOUTH);
         overview.add(bottom, BorderLayout.SOUTH);
 
@@ -230,7 +233,7 @@ public class Food extends JPanel {
             button.setUI(new javax.swing.plaf.basic.BasicButtonUI());
             button.setActionCommand(status); button.setFocusPainted(false);
             button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-            button.setBorder(BorderFactory.createLineBorder(new Color(208, 221, 212)));
+            button.setBorder(BorderFactory.createLineBorder(new Color(102, 117, 110)));
             group.add(button); buttons.add(button); row.add(button);
             button.setSelected(status.equals(selected));
             button.addActionListener(e -> restyle.run());
@@ -246,9 +249,9 @@ public class Food extends JPanel {
         return "Empty".equals(label) ? "Empty" : "Low".equals(label) ? "Running low" : "Filled";
     }
 
-    private static JComponent legendItem(String text) {
+    private static JComponent legendItem(Color color, String text) {
         JPanel item = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        item.add(statusLabel(text));
+        item.add(new StatusDot(color, text, 12));
         JLabel label = new JLabel(text);
         label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         item.add(label);
@@ -261,63 +264,108 @@ public class Food extends JPanel {
         String details = displayStatus(p[2]);
         if (settings == null || settings.showFoodDetails()) {
             if (!p[4].trim().isEmpty())
-                details += "  •  " + p[4] + (p[5].trim().isEmpty() ? "" : " " + p[5]);
+                details += "  •  " + Stock.withUnit(p[4], p[5]);
             details += "  •  " + p[6];
             if (p[3].equals("Staple")) details += "  •  Staple";
         }
         boolean compact = settings != null && settings.compactFoodRows();
         int fontSize = settings != null && settings.largerListText() ? 17 : 15;
-        String caution = warnings.isEmpty() ? null
-                : "User conflict";
+        // A tablet has no hover, so the reason is shown on the row itself.
+        String caution = warnings.isEmpty() ? null : String.join("; ", warnings);
         FoodRow row = new FoodRow(p[0], details, caution, p[2], fontSize, compact,
                 selected, list.getWidth());
         row.setToolTipText(warnings.isEmpty() ? details : String.join("; ", warnings));
         return row;
     }
 
-    // Standard Swing text components wrap the copy; status artwork comes from PNG resources.
+    /** Draws status and wrapped copy directly, so Swing never clips a wrapped sublabel. */
     private static class FoodRow extends JPanel {
         private static final long serialVersionUID = 1L;
-        private final JPanel copy = new JPanel();
-        private final int suppliedWidth, padding;
+        private final String name, details, caution, state;
+        private final int suppliedWidth;
+        private final boolean compact;
+        private final Font titleFont, bodyFont;
+        private final Color background;
         FoodRow(String name, String details, String caution, String state,
                 int fontSize, boolean compact, boolean selected, int suppliedWidth) {
-            super(new BorderLayout(12, 0));
+            this.name = name; this.details = details; this.caution = caution;
+            this.state = state; this.compact = compact;
             this.suppliedWidth = suppliedWidth;
-            padding = compact ? 8 : 12;
-            setBorder(new EmptyBorder(padding, 11, padding, 12));
-            setBackground(selected ? new Color(219, 240, 225)
-                    : caution == null ? Color.WHITE : new Color(255, 248, 230));
-            copy.setOpaque(false);
-            copy.setLayout(new BoxLayout(copy, BoxLayout.Y_AXIS));
-            copy.add(rowText(name, new Font(Font.SANS_SERIF, Font.BOLD, fontSize), new Color(34, 54, 45)));
-            copy.add(Box.createVerticalStrut(4));
-            Font body = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(13, fontSize - 1));
-            copy.add(rowText(details, body, new Color(88, 111, 99)));
-            if (caution != null) {
-                copy.add(Box.createVerticalStrut(5));
-                copy.add(rowText(caution, body, new Color(151, 82, 13)));
-            }
-            add(copy, BorderLayout.CENTER);
-            add(statusLabel(state), BorderLayout.EAST);
+            this.titleFont = new Font(Font.SANS_SERIF, Font.BOLD, fontSize);
+            this.bodyFont = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(13, fontSize - 1));
+            this.background = selected ? new Color(219, 240, 225)
+                    : caution == null ? Color.WHITE : new Color(255, 248, 230);
+            setBackground(background);
+            setOpaque(false);
             getAccessibleContext().setAccessibleName(name + ", " + details + (caution == null ? "" : ", " + caution));
-            // List renderers are not live containers; lay out their nested text column explicitly.
-            setSize(getPreferredSize());
-            doLayout();
-            copy.doLayout();
         }
-        private static WrapText rowText(String text, Font font, Color color) {
-            WrapText label = new WrapText(text);
-            label.setFont(font); label.setForeground(color);
-            label.setAlignmentX(Component.LEFT_ALIGNMENT);
-            return label;
-        }
+        private int availableWidth(int rowWidth) { return Math.max(110, rowWidth - 64); }
+        private int padding() { return compact ? 8 : 12; }
         @Override public Dimension getPreferredSize() {
             int width = Math.max(190, suppliedWidth > 0 ? suppliedWidth - 4 : 310);
-            copy.setSize(Math.max(110, width - 59), 10000);
-            int height = 0;
-            for (Component child : copy.getComponents()) height += child.getPreferredSize().height;
-            return new Dimension(width, 2 * padding + Math.max(24, height));
+            int textWidth = availableWidth(width);
+            FontMetrics t = getFontMetrics(titleFont);
+            FontMetrics b = getFontMetrics(bodyFont);
+            int titleH = wrap(name, t, textWidth).size() * t.getHeight();
+            int detailH = wrap(details, b, textWidth).size() * b.getHeight();
+            int cautionH = caution == null ? 0 : 5 + wrap(caution, b, textWidth).size() * b.getHeight();
+            return new Dimension(width, 2 * padding() + titleH + 4 + detailH + cautionH);
+        }
+        @Override protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(background);
+            g2.fillRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 16, 16);
+            int left = 11;
+            int textWidth = availableWidth(getWidth());
+            int y = padding();
+            y = drawLines(g2, name, titleFont, new Color(34, 54, 45), left, y, textWidth);
+            y += 4;
+            y = drawLines(g2, details, bodyFont, new Color(88, 111, 99), left, y, textWidth);
+            if (caution != null) {
+                y += 5;
+                drawLines(g2, caution, bodyFont, new Color(151, 82, 13), left, y, textWidth);
+            }
+            int diameter = 18;
+            int x = getWidth() - 32;
+            int middle = getHeight() / 2;
+            g2.setColor(statusColor(state));
+            g2.fillOval(x, middle - diameter / 2, diameter, diameter);
+            g2.setColor(statusColor(state).darker());
+            g2.drawOval(x, middle - diameter / 2, diameter, diameter);
+            g2.dispose();
+        }
+        private static int drawLines(Graphics2D g2, String text, Font font, Color color,
+                                     int x, int top, int width) {
+            g2.setFont(font);
+            g2.setColor(color);
+            FontMetrics fm = g2.getFontMetrics();
+            for (String line : wrap(text, fm, width)) {
+                g2.drawString(line, x, top + fm.getAscent());
+                top += fm.getHeight();
+            }
+            return top;
+        }
+        private static List<String> wrap(String text, FontMetrics fm, int width) {
+            List<String> lines = new ArrayList<>();
+            String current = "";
+            for (String word : text.trim().split("\\s+")) {
+                String candidate = current.isEmpty() ? word : current + " " + word;
+                if (fm.stringWidth(candidate) <= width) { current = candidate; continue; }
+                if (!current.isEmpty()) { lines.add(current); current = ""; }
+                while (fm.stringWidth(word) > width && word.length() > 1) {
+                    int n = 1;
+                    while (n < word.length() && fm.stringWidth(word.substring(0, n + 1)) <= width) n++;
+                    lines.add(word.substring(0, n));
+                    word = word.substring(n);
+                }
+                current = word;
+            }
+            if (!current.isEmpty()) lines.add(current);
+            if (lines.isEmpty()) lines.add("");
+            return lines;
         }
     }
 
@@ -325,13 +373,33 @@ public class Food extends JPanel {
         return state.equalsIgnoreCase("Empty") ? "Empty" :
                 state.equalsIgnoreCase("Filled") || state.equalsIgnoreCase("Full") ? "Full" : "Low";
     }
-    private static JLabel statusLabel(String state) {
-        String status = displayStatus(state);
-        JLabel label = new JLabel(AppScreens.statusIcon(status));
-        label.setToolTipText(status);
-        label.getAccessibleContext().setAccessibleName("Availability: " + status);
-        label.setPreferredSize(new Dimension(24, 24));
-        return label;
+    static Color statusColor(String state) {
+        return state.equalsIgnoreCase("Empty") ? EMPTY :
+                state.equalsIgnoreCase("Filled") || state.equalsIgnoreCase("Full") ? FULL : LOW;
+    }
+
+    /** Painted vector dot instead of a font-specific emoji. */
+    private static class StatusDot extends JComponent {
+        private static final long serialVersionUID = 1L;
+        private final Color color;
+        private final int diameter;
+        StatusDot(Color color, String status, int diameter) {
+            this.color = color;
+            this.diameter = diameter;
+            setToolTipText(status);
+            if (getAccessibleContext() != null)
+                getAccessibleContext().setAccessibleName("Availability: " + status);
+            setPreferredSize(new Dimension(diameter + 4, diameter + 4));
+        }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval((getWidth() - diameter)/2, (getHeight() - diameter)/2, diameter, diameter);
+            g2.setColor(color.darker());
+            g2.drawOval((getWidth() - diameter)/2, (getHeight() - diameter)/2, diameter, diameter);
+            g2.dispose();
+        }
     }
 
     public void setAppData(AppData data) { this.data = data; refreshData(); }
@@ -369,7 +437,7 @@ public class Food extends JPanel {
             visibleItems.add(item);
             model.addElement(item);
         }
-        inventoryHint.setText(model.isEmpty() ? "Add your first item with Add item below." : model.size() + " items  /  Tap an item for details");
+        inventoryHint.setText(model.isEmpty() ? "Add your first item with Add item below." : model.size() + (model.size() == 1 ? " item" : " items") + "  /  Tap an item for details");
         if (selected != null) list.setSelectedValue(selected, true);
         // A purchase can update this item while another destination is active.
         if (editingItem != null && !data.foods.contains(editingItem)) {
